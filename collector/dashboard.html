@@ -25,7 +25,7 @@
   .cards{display:flex;gap:16px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
   .cards::-webkit-scrollbar{height:9px}
   .cards::-webkit-scrollbar-thumb{background:#30363d;border-radius:5px}
-  .card{flex:0 0 300px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;scroll-snap-align:start}
+  .card{position:relative;flex:0 0 320px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;scroll-snap-align:start}
   .addcard{flex:0 0 132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
            border:1px dashed var(--line);border-radius:10px;color:var(--mut);cursor:pointer;background:#0d1117}
   .addcard:hover{border-color:var(--accent);color:var(--fg)}
@@ -35,8 +35,8 @@
           align-items:center;justify-content:center}
   .carbtn:hover{border-color:var(--accent)}
   .carbtn.left{left:-6px} .carbtn.right{right:-6px}
-  .card h2{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
-  .host-sub{color:var(--mut);font-size:11px;margin-bottom:12px}
+  .card h2{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:74px}
+  .host-sub{color:var(--mut);font-size:11px;margin-bottom:12px;padding-right:74px}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
   .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.stale{background:var(--warn)}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
@@ -110,7 +110,7 @@
   .empty{color:var(--mut);font-size:12.5px;padding:6px 0}
 
   /* ---- toggle on/off host nelle strip ---- */
-  .card h2 .enh{margin-left:auto;font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);
+  .card h2 .enh{font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);
         background:#0d1117;color:var(--mut);cursor:pointer;user-select:none;white-space:nowrap}
   .card h2 .enh.on{color:var(--accent);border-color:var(--accent);background:#0d2137}
   .card.off{opacity:.72}
@@ -368,13 +368,26 @@
     border:1px solid var(--line);border-radius:20px;padding:2px 10px;display:inline-block}
   .remitem .copycmd:hover{border-color:var(--accent)}
   /* ---- KPI sicurezza RAG sulla card ---- */
-  .kpi{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:20px;
-    padding:2px 9px;cursor:pointer;border:1px solid;font-variant-numeric:tabular-nums;vertical-align:middle}
-  .kpi.red{color:var(--bad);border-color:var(--bad);background:#2a1213}
-  .kpi.amber{color:var(--warn);border-color:var(--warn);background:#241d0f}
-  .kpi.green{color:var(--ok);border-color:var(--ok);background:#0f2417}
-  .kpi.grey{color:var(--mut);border-color:var(--line);background:transparent;font-weight:600}
-  .kpi.run{opacity:.6}
+  /* KPI di sicurezza: badge circolare in evidenza nell'angolo in alto a destra della card */
+  .seckpi{position:absolute;top:14px;right:14px;z-index:2;display:flex;flex-direction:column;align-items:center;
+    gap:5px;cursor:pointer;text-decoration:none;transition:transform .12s ease}
+  .seckpi:hover{transform:scale(1.06)}
+  .seckpi .ring{position:relative;width:54px;height:54px;border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;line-height:1;border:3px solid var(--kc);
+    background:radial-gradient(circle at 50% 38%,var(--kbg),transparent 72%);
+    box-shadow:0 0 0 4px var(--kglow),0 3px 10px rgba(0,0,0,.45)}
+  .seckpi .ring b{font-size:20px;font-weight:800;color:var(--kc);font-variant-numeric:tabular-nums}
+  .seckpi .ring i{font-size:8px;font-style:normal;letter-spacing:.6px;color:var(--mut);text-transform:uppercase;margin-top:2px}
+  .seckpi .cap{font-size:9.5px;font-weight:700;letter-spacing:.2px;color:var(--kc);white-space:nowrap;
+    display:flex;align-items:center;gap:3px}
+  .seckpi.red  {--kc:#f85149;--kbg:rgba(248,81,73,.22);--kglow:rgba(248,81,73,.12)}
+  .seckpi.amber{--kc:#e3b341;--kbg:rgba(210,153,34,.22);--kglow:rgba(210,153,34,.11)}
+  .seckpi.green{--kc:#3fb950;--kbg:rgba(63,185,80,.20);--kglow:rgba(63,185,80,.10)}
+  .seckpi.grey {--kc:#7d8590;--kbg:rgba(110,118,129,.14);--kglow:transparent}
+  .seckpi.grey .cap{color:var(--mut)}
+  .seckpi.run .ring{animation:kpulse 1.15s ease-in-out infinite}
+  @keyframes kpulse{0%,100%{box-shadow:0 0 0 4px var(--kglow),0 3px 10px rgba(0,0,0,.45)}
+    50%{box-shadow:0 0 0 9px var(--kglow),0 3px 10px rgba(0,0,0,.45)}}
   .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
   .scan-scanning b{color:var(--fg)}
   .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
@@ -794,20 +807,32 @@ function scanBtn(name){
 let SCAN_KPI = {};   // { host: {cve,exploit,critical,high,open_ports,up,status,running,...} }
 function secKpi(name){
   const s = SCAN_KPI[name];
-  if(!s || s.status==="none" || s.status==null){
-    return `<span class="kpi grey" data-scan="${escapeHtml(name)}" title="nessuna scansione ancora — apri Status per avviarla">🛡 —</span>`;
-  }
-  if(s.running && (s.status==="none")){
-    return `<span class="kpi run" data-scan="${escapeHtml(name)}" title="scansione in corso…">🛡 …</span>`;
+  const running = s && s.running;
+  // mai scansionato
+  if(!s || s.status==null || (s.status==="none")){
+    const cls = running ? "grey run" : "grey";
+    const tip = running ? "scansione in corso…" : "nessuna scansione ancora — clicca per avviarla";
+    return `<a class="seckpi ${cls}" data-scan="${escapeHtml(name)}" title="${tip}">
+      <span class="ring"><b>${running?"…":"–"}</b><i>CVE</i></span>
+      <span class="cap">${running?"scan…":"no scan"}</span></a>`;
   }
   const crit=s.critical||0, high=s.high||0, expl=s.exploit||0, cve=s.cve||0;
-  let cls, tip;
-  if(expl>0 || crit>0){ cls="red"; tip=`${cve} CVE · ${crit} critiche · ${expl} con exploit noto`; }
-  else if(high>0){ cls="amber"; tip=`${cve} CVE · ${high} gravi (7–9)`; }
-  else if(cve>0){ cls="amber"; tip=`${cve} CVE (nessuna grave)`; }
-  else { cls="green"; tip="nessuna CVE correlata"; }
-  const num = (expl>0||crit>0) ? (crit+expl) : (high>0 ? high : cve);
-  return `<span class="kpi ${cls}" data-scan="${escapeHtml(name)}" title="Sicurezza: ${tip} — apri Status">🛡 ${num}</span>`;
+  let cls, cap, tip;
+  if(expl>0 || crit>0){
+    cls="red";
+    cap = expl>0 ? `⚡ ${expl} exploit` : `${crit} critiche`;
+    tip = `${cve} CVE correlate · ${crit} critiche (CVSS≥9) · ${expl} con exploit noto — clicca per il dettaglio`;
+  } else if(high>0){
+    cls="amber"; cap=`${high} gravi`; tip=`${cve} CVE correlate · ${high} gravi (CVSS 7–9) — clicca per il dettaglio`;
+  } else if(cve>0){
+    cls="amber"; cap="da rivedere"; tip=`${cve} CVE correlate (nessuna grave) — clicca per il dettaglio`;
+  } else {
+    cls="green"; cap="sicuro"; tip="nessuna CVE correlata — clicca per il dettaglio";
+  }
+  if(running) cls+=" run";
+  return `<a class="seckpi ${cls}" data-scan="${escapeHtml(name)}" title="${tip}">
+    <span class="ring"><b>${cve}</b><i>CVE</i></span>
+    <span class="cap">${cap}</span></a>`;
 }
 async function loadScans(){
   try{
@@ -820,7 +845,7 @@ async function loadScans(){
 }
 function hostCard(name, d){
   if(!d || d.error){
-    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${secKpi(name)}${scanBtn(name)}${enhPill(name)}</h2>
+    return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}<h2><span class="dot bad"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
       <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
   }
   const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
@@ -832,8 +857,8 @@ function hostCard(name, d){
         <small>usato ${hbytes(dk.used)} · libero ${hbytes(dk.avail)} · tot ${hbytes(dk.size)}</small></div>
       <div class="${barClass(dk.use_pct)}"><i style="width:${dk.use_pct}%"></i></div></div>`).join("")
     || '<div class="empty">—</div>';
-  return `<div class="card${isEnabled(name)?'':' off'}">
-    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${secKpi(name)}${scanBtn(name)}${enhPill(name)}</h2>
+  return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}
+    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
     <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
     <div class="grid2">
       <div class="metric"><div class="label">RAM</div>
