@@ -18,11 +18,12 @@ import sqlite3
 import subprocess
 import threading
 import time
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.4"
+VERSION = "v2.5"
 BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
@@ -48,6 +49,11 @@ INTERVAL = int(os.environ.get("MON_INTERVAL", "15"))
 RETENTION_H = int(os.environ.get("MON_RETENTION_HOURS", "48"))
 SSH_KEY = os.environ.get("MON_SSH_KEY", "/app/ssh/monitor_ed25519")
 DATA_DIR = os.environ.get("MON_DATA_DIR", "/app/data")
+# --- scansione nmap (agentless, on-premise) ---
+NMAP_ENABLED = os.environ.get("MON_NMAP", "1") not in ("0", "false", "no", "")
+NMAP_INTERVAL_H = int(os.environ.get("MON_NMAP_INTERVAL_HOURS", "6"))   # rescan automatico ogni N ore
+NMAP_TOP_PORTS = int(os.environ.get("MON_NMAP_TOP_PORTS", "1000"))      # profondità standard
+NMAP_DEEP = os.environ.get("MON_NMAP_DEEP", "0") not in ("0", "false", "no", "")  # tutte le 65535 porte
 DB_PATH = os.path.join(DATA_DIR, "metrics.db")
 KNOWN_HOSTS = os.path.join(DATA_DIR, "known_hosts")
 HOSTS_FILE = os.path.join(DATA_DIR, "hosts.json")
@@ -77,6 +83,8 @@ _lock = threading.Lock()
 _latest = {}   # name -> enriched snapshot (dict) or {"error": ...}
 _prev = {}     # name -> (ts, {counters}) per il calcolo dei rate
 HOSTS = []     # [(name, target)] — lista viva, modificabile a caldo dalla config
+_scan_lock = threading.Lock()
+_scans_running = set()   # nomi host con una scansione nmap in corso
 
 
 def save_hosts():
@@ -341,6 +349,16 @@ def init_db():
             )
         """)
         c.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        # scansioni nmap: una riga (l'ultima) per host
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS scans (
+                host TEXT PRIMARY KEY,
+                ts INTEGER,
+                duration REAL,
+                status TEXT,
+                json TEXT
+            )
+        """)
 
 
 # ---------------------------------------------------------------- poller
@@ -444,6 +462,137 @@ def poller_loop():
         start = time.time()
         poll_once()
         time.sleep(max(1.0, INTERVAL - (time.time() - start)))
+
+
+# ---------------------------------------------------------------- scansione nmap
+def _target_ip(target):
+    """'utente@100.1.2.3' -> '100.1.2.3' (rimuove eventuale :porta)."""
+    host = target.split("@", 1)[1] if "@" in target else target
+    return host.split(":", 1)[0]
+
+
+def run_nmap(ip):
+    """Scansione nmap OFFLINE (nessuna query esterna): versioni servizi (-sV),
+    script sicuri di default (-sC) e OS detection (-O). Ritorna un dict strutturato.
+    -sS/-O richiedono privilegi raw: il container gira root con NET_RAW/NET_ADMIN."""
+    scope = ["-p-"] if NMAP_DEEP else ["--top-ports", str(NMAP_TOP_PORTS)]
+    cmd = (["nmap", "-sV", "-sC", "-O", "-T4", "--host-timeout", "300s",
+            "--max-retries", "2", "-oX", "-"] + scope + [ip])
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if not (p.stdout or "").strip():
+        raise RuntimeError((p.stderr or "nmap rc=%d" % p.returncode).strip()[:300])
+    return parse_nmap_xml(p.stdout)
+
+
+def parse_nmap_xml(xml_text):
+    """Estrae dall'XML di nmap: stato host, indirizzi, hostname, porte (con servizio,
+    versione, CPE e script), OS match e script a livello host."""
+    root = ET.fromstring(xml_text)
+    fin = root.find("runstats/finished")
+    out = {
+        "up": False, "addresses": [], "hostnames": [], "ports": [], "os": [],
+        "hostscripts": [], "extraports": None,
+        "elapsed": float(fin.get("elapsed")) if (fin is not None and fin.get("elapsed")) else None,
+        "nmap_version": root.get("version"), "args": root.get("args"),
+    }
+    hostel = root.find("host")
+    if hostel is None:
+        return out
+    st = hostel.find("status")
+    out["up"] = (st is not None and st.get("state") == "up")
+    for a in hostel.findall("address"):
+        out["addresses"].append({"addr": a.get("addr"), "type": a.get("addrtype"),
+                                 "vendor": a.get("vendor")})
+    hn = hostel.find("hostnames")
+    if hn is not None:
+        out["hostnames"] = [h.get("name") for h in hn.findall("hostname") if h.get("name")]
+    ports = hostel.find("ports")
+    if ports is not None:
+        ep = ports.find("extraports")
+        if ep is not None:
+            out["extraports"] = {"state": ep.get("state"), "count": int(ep.get("count") or 0)}
+        for p in ports.findall("port"):
+            state = p.find("state")
+            svc = p.find("service")
+            scripts = [{"id": s.get("id"), "output": (s.get("output") or "").strip()}
+                       for s in p.findall("script")]
+            out["ports"].append({
+                "port": int(p.get("portid")),
+                "proto": p.get("protocol"),
+                "state": state.get("state") if state is not None else None,
+                "reason": state.get("reason") if state is not None else None,
+                "service": svc.get("name") if svc is not None else None,
+                "product": svc.get("product") if svc is not None else None,
+                "version": svc.get("version") if svc is not None else None,
+                "extrainfo": svc.get("extrainfo") if svc is not None else None,
+                "tunnel": svc.get("tunnel") if svc is not None else None,
+                "cpe": [c.text for c in (svc.findall("cpe") if svc is not None else [])],
+                "scripts": scripts,
+            })
+    # tengo solo le porte non chiuse (open / open|filtered) per la UI
+    out["ports"] = [pp for pp in out["ports"] if pp["state"] and pp["state"] != "closed"]
+    out["ports"].sort(key=lambda x: x["port"])
+    for m in hostel.findall("os/osmatch"):
+        out["os"].append({"name": m.get("name"), "accuracy": int(m.get("accuracy") or 0)})
+    out["os"].sort(key=lambda x: -x["accuracy"])
+    for s in hostel.findall("hostscript/script"):
+        out["hostscripts"].append({"id": s.get("id"), "output": (s.get("output") or "").strip()})
+    return out
+
+
+def save_scan(host, status, result, duration):
+    now = int(time.time())
+    with db() as c:
+        c.execute(
+            "INSERT OR REPLACE INTO scans (host, ts, duration, status, json) VALUES (?,?,?,?,?)",
+            (host, now, duration, status, json.dumps(result) if result is not None else None))
+
+
+def get_scan(host):
+    with db() as c:
+        r = c.execute("SELECT ts, duration, status, json FROM scans WHERE host=?", (host,)).fetchone()
+    if not r:
+        return None
+    return {"ts": r["ts"], "duration": r["duration"], "status": r["status"],
+            "result": json.loads(r["json"]) if r["json"] else None}
+
+
+def do_scan(host, target):
+    """Esegue una scansione nmap (sincrona) e la persiste. Un solo scan per host alla volta."""
+    with _scan_lock:
+        if host in _scans_running:
+            return
+        _scans_running.add(host)
+    start = time.time()
+    try:
+        result = run_nmap(_target_ip(target))
+        save_scan(host, "ok", result, round(time.time() - start, 1))
+    except Exception as e:
+        save_scan(host, "error", {"error": str(e)[:400]}, round(time.time() - start, 1))
+    finally:
+        with _scan_lock:
+            _scans_running.discard(host)
+
+
+def scan_async(host, target):
+    threading.Thread(target=do_scan, args=(host, target), daemon=True).start()
+
+
+def scan_loop():
+    """Scheduler background: rifà la scansione di ogni host quando diventa stantìa
+    (> NMAP_INTERVAL_H ore). Sequenziale: una scansione pesante alla volta."""
+    if not NMAP_ENABLED:
+        return
+    time.sleep(25)  # lascia partire poller + web
+    while True:
+        for name, target in list(HOSTS):
+            cur = get_scan(name)
+            stale = (cur is None) or (int(time.time()) - cur["ts"] > NMAP_INTERVAL_H * 3600)
+            with _scan_lock:
+                busy = name in _scans_running
+            if stale and not busy:
+                do_scan(name, target)
+        time.sleep(300)  # ricontrolla ogni 5 min
 
 
 # ---------------------------------------------------------------- web
@@ -574,6 +723,26 @@ class Handler(BaseHTTPRequestHandler):
             else:     # tutti gli host -> {host: [righe]}
                 out = {n: fetch(n) for n, _ in list(HOSTS)}
                 self._send(200, json.dumps(out), "application/json")
+        elif u.path == "/api/scan":
+            q = parse_qs(u.query)
+            host = (q.get("host") or [""])[0]
+            names = [n for n, _ in HOSTS]
+            if not host or host not in names:
+                return self._json(404, {"error": "host inesistente"})
+            cur = get_scan(host)
+            with _scan_lock:
+                running = host in _scans_running
+            now = int(time.time())
+            resp = {"host": host, "running": running, "enabled": NMAP_ENABLED,
+                    "interval_hours": NMAP_INTERVAL_H, "deep": NMAP_DEEP,
+                    "top_ports": NMAP_TOP_PORTS}
+            if cur:
+                resp.update({"ts": cur["ts"], "age": now - cur["ts"],
+                             "duration": cur["duration"], "status": cur["status"],
+                             "result": cur["result"]})
+            else:
+                resp["status"] = "none"
+            self._json(200, resp)
         elif u.path == "/api/hosts":
             self._json(200, {"hosts": self._hosts_list()})
         elif u.path == "/api/setup":
@@ -729,6 +898,23 @@ class Handler(BaseHTTPRequestHandler):
                 save_hosts()
             return self._json(200, {"ok": True, "hosts": self._hosts_list()})
 
+        if u.path == "/api/scan":
+            if user["role"] != "admin":
+                return self._json(403, {"error": "richiede admin"})
+            if not NMAP_ENABLED:
+                return self._json(400, {"error": "scansione nmap disabilitata"})
+            b = self._read_json()
+            host = (b.get("host") or "").strip()
+            target = dict(HOSTS).get(host)
+            if not target:
+                return self._json(404, {"error": "host inesistente"})
+            with _scan_lock:
+                if host in _scans_running:
+                    return self._json(200, {"ok": True, "running": True,
+                                            "note": "scansione già in corso"})
+            scan_async(host, target)   # parte in background; il client fa polling su GET /api/scan
+            return self._json(200, {"ok": True, "running": True})
+
         if u.path == "/api/enroll":
             if user["role"] != "admin":
                 return self._json(403, {"error": "richiede admin"})
@@ -775,6 +961,8 @@ def main():
     load_users()
     t = threading.Thread(target=poller_loop, daemon=True)
     t.start()
+    if NMAP_ENABLED:
+        threading.Thread(target=scan_loop, daemon=True).start()
     srv = ThreadingHTTPServer((BIND_HOST, BIND_PORT), Handler)
     print("gp-monitor in ascolto su http://%s:%d — hosts=%s interval=%ds retention=%dh"
           % (BIND_HOST, BIND_PORT, ",".join(n for n, _ in HOSTS), INTERVAL, RETENTION_H), flush=True)

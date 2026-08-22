@@ -8,6 +8,10 @@ services:
     # host network: così il container raggiunge gli IP Tailscale 100.x come l'host
     network_mode: host
     restart: unless-stopped
+    # NET_RAW/NET_ADMIN: servono a nmap per SYN scan (-sS) e OS detection (-O)
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
     environment:
       # nome=utente@ip-tailscale — srv2 entra come user (sudo NOPASSWD -> sonda)
       MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2,srv3=root@10.0.0.3"
@@ -15,6 +19,10 @@ services:
       MON_BIND: "10.0.0.2:8888"
       MON_INTERVAL: "15"
       MON_RETENTION_HOURS: "48"
+      # scansione nmap (agentless, offline): rescan automatico ogni 6h + on-demand dal drawer
+      MON_NMAP: "1"
+      MON_NMAP_INTERVAL_HOURS: "6"
+      MON_NMAP_TOP_PORTS: "1000"
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:

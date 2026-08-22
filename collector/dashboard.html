@@ -248,6 +248,62 @@
   .newuser button:hover{background:#2ea043}
   .dwmsg{font-size:12.5px;min-height:16px;margin-top:10px}
   .dwmsg.err{color:var(--bad)} .dwmsg.ok{color:var(--ok)}
+
+  /* ---- drawer scansione nmap (report grafico) ---- */
+  .card h2 .scanbtn{font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);
+        background:#0d1117;color:var(--mut);cursor:pointer;user-select:none;white-space:nowrap;margin-left:6px}
+  .card h2 .scanbtn:hover{color:var(--accent);border-color:var(--accent);background:#0d2137}
+  .drawer.wide{width:min(760px,96vw)}
+  .scan-hero{background:linear-gradient(135deg,#0d2137,#161b22);border:1px solid var(--line);
+        border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .scan-hero .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .scan-hero .ip{font-family:ui-monospace,Menlo,monospace;color:var(--mut);font-size:12.5px}
+  .scan-hero .stpill{font-size:11px;padding:2px 10px;border-radius:20px;border:1px solid;font-weight:600}
+  .scan-hero .stpill.up{color:var(--ok);border-color:var(--ok);background:#0f2417}
+  .scan-hero .stpill.down{color:var(--bad);border-color:var(--bad);background:#2a1213}
+  .scan-hero .fresh{margin-left:auto;font-size:11px;color:var(--mut);text-align:right;line-height:1.45}
+  .scan-hero .fresh b{color:var(--fg)}
+  .rescan{margin-top:11px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;
+        padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .rescan:hover{background:#2ea043}
+  .rescan:disabled{opacity:.6;cursor:default}
+  .scan-os{display:flex;align-items:center;gap:12px;background:#0d1117;border:1px solid var(--line);
+        border-radius:10px;padding:12px 14px;margin-bottom:14px}
+  .scan-os .osname{font-size:15px;font-weight:600}
+  .scan-os .ossub{color:var(--mut);font-size:11px;margin-top:3px;text-transform:uppercase;letter-spacing:.03em}
+  .scan-os .accbar{margin-top:6px;height:6px;border-radius:3px;background:#21262d;overflow:hidden;max-width:220px}
+  .scan-os .accbar>i{display:block;height:100%;background:var(--accent)}
+  .portgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-bottom:4px}
+  .pchip{background:#0d1117;border:1px solid var(--line);border-left:3px solid var(--mut);border-radius:8px;
+        padding:7px 9px;line-height:1.25;overflow:hidden}
+  .pchip .pn{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .pchip .ps{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.02em;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .plist{margin-top:4px}
+  .pitem{border-top:1px solid #21262d}
+  .pitem .ph{display:flex;align-items:baseline;gap:8px;padding:9px 2px;cursor:default}
+  .pitem .ph.click{cursor:pointer} .pitem .ph.click:hover{background:#0d1117}
+  .pitem .ph .p{font-weight:700;font-variant-numeric:tabular-nums;min-width:64px}
+  .pitem .ph .svc{color:var(--accent);font-weight:600}
+  .pitem .ph .ver{color:var(--mut);font-size:12px;margin-left:auto;text-align:right;padding-left:8px}
+  .pitem .det{padding:0 2px 10px;font-size:12px}
+  .pitem .det .cpe{color:var(--mut);font-family:ui-monospace,Menlo,monospace;font-size:11px;word-break:break-all;margin-top:3px}
+  .pitem .det .sid{color:var(--warn);font-size:11px;font-weight:600;margin-top:7px}
+  .pitem .det pre,.hs-item pre{background:#0d1117;border:1px solid var(--line);border-radius:7px;padding:8px 10px;
+        overflow:auto;font-size:11px;white-space:pre-wrap;word-break:break-word;margin:5px 0 0;color:var(--fg)}
+  .hs-item{border-top:1px solid #21262d;padding:8px 2px}
+  .hs-item .hid{color:var(--warn);font-weight:600;font-size:12px}
+  .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
+  .scan-scanning b{color:var(--fg)}
+  .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
+        background:radial-gradient(circle,#0d2137 0%,#0d1117 72%);border:1px solid var(--line);overflow:hidden}
+  .radar::after{content:"";position:absolute;inset:-2px;border-radius:50%;
+        background:conic-gradient(from 0deg,transparent 0deg,rgba(88,166,255,.55) 55deg,transparent 90deg);
+        animation:sweep 1.5s linear infinite}
+  @keyframes sweep{to{transform:rotate(360deg)}}
+  .scan-none{color:var(--mut);text-align:center;padding:26px 10px;line-height:1.6}
+  .scan-err{color:var(--bad);background:#2a1213;border:1px solid var(--bad);border-radius:8px;
+        padding:10px 12px;font-size:12.5px;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -356,6 +412,13 @@
     </div>
     <div class="dwmsg" id="usrMsg"></div>
   </div>
+</aside>
+
+<!-- drawer scansione nmap (report per server) -->
+<div class="drawer-ovl" id="scanOvl"></div>
+<aside class="drawer wide" id="scanDrawer" aria-hidden="true">
+  <div class="dwh">🔍 <b id="scanTitle">Scansione</b><span class="x" id="scanX">✕</span></div>
+  <div class="dwbody" id="scanBody"></div>
 </aside>
 
 <script>
@@ -621,9 +684,13 @@ function enhPill(name){
   return `<span class="enh ${on?'on':''}" data-enh="${escapeHtml(name)}"
     title="includi ${escapeHtml(name)} nelle strip Rete/Sicurezza">${on?'● in grafico':'○ escluso'}</span>`;
 }
+function scanBtn(name){
+  return `<span class="scanbtn" data-scan="${escapeHtml(name)}"
+    title="scansione nmap di ${escapeHtml(name)} (porte, servizi, OS)">🔍 Scan</span>`;
+}
 function hostCard(name, d){
   if(!d || d.error){
-    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${enhPill(name)}</h2>
+    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
       <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
   }
   const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
@@ -636,7 +703,7 @@ function hostCard(name, d){
       <div class="${barClass(dk.use_pct)}"><i style="width:${dk.use_pct}%"></i></div></div>`).join("")
     || '<div class="empty">—</div>';
   return `<div class="card${isEnabled(name)?'':' off'}">
-    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${enhPill(name)}</h2>
+    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
     <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
     <div class="grid2">
       <div class="metric"><div class="label">RAM</div>
@@ -831,7 +898,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-pexp]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -860,6 +927,11 @@ document.addEventListener("click", e=>{
     if(flowDirs.includes(k)){ if(flowDirs.length>1) flowDirs=flowDirs.filter(x=>x!==k); }  // resta ≥1
     else flowDirs=[...flowDirs,k];
     renderFlow(); }
+  else if(t.dataset.scan){ openScan(t.dataset.scan); }
+  else if(t.dataset.rescan){ rescan(); }
+  else if(t.dataset.pexp){ const p=+t.dataset.pexp;
+    scanExpanded.has(p)?scanExpanded.delete(p):scanExpanded.add(p);
+    if(scanData) renderScan(scanData); }
 });
 
 // frecce carosello
@@ -1040,7 +1112,170 @@ document.getElementById("usersBtn").onclick=openUsers;
 document.getElementById("usrX").onclick=closeUsers;
 document.getElementById("usrOvl").onclick=closeUsers;
 document.getElementById("nuCreate").onclick=createUser;
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeUsers(); closeConfig(); } });
+document.getElementById("scanX").onclick=closeScan;
+document.getElementById("scanOvl").onclick=closeScan;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeUsers(); closeConfig(); closeScan(); } });
+
+// ------------------------------------------------------------ scansione nmap (drawer)
+let scanHost=null, scanTimer=null, scanData=null;
+let scanExpanded=new Set();   // porte con dettaglio espanso
+
+// famiglie di porte -> colore (overview a colpo d'occhio)
+const PORT_FAMILY = {
+  web:   {c:"#58a6ff", ports:[80,443,8080,8443,8000,8081,3000,5000,8888]},
+  remote:{c:"#bc8cff", ports:[22,23,3389,5900,5901]},
+  db:    {c:"#f0883e", ports:[3306,5432,6379,27017,9200,11211,1433,5984]},
+  mail:  {c:"#3fb950", ports:[25,110,143,465,587,993,995]},
+  net:   {c:"#39d0d8", ports:[53,123,161,500,4500,51820]},
+};
+function portColor(p, svc){
+  for(const k in PORT_FAMILY){ if(PORT_FAMILY[k].ports.includes(p)) return PORT_FAMILY[k].c; }
+  svc=(svc||"").toLowerCase();
+  if(/http|proxy/.test(svc)) return PORT_FAMILY.web.c;
+  if(/ssh|rdp|vnc|telnet|remote/.test(svc)) return PORT_FAMILY.remote.c;
+  if(/sql|redis|mongo|memcache|elastic|db/.test(svc)) return PORT_FAMILY.db.c;
+  if(/smtp|imap|pop|mail/.test(svc)) return PORT_FAMILY.mail.c;
+  if(/dns|ntp|snmp|wireguard|ipsec/.test(svc)) return PORT_FAMILY.net.c;
+  return "#6e7681";
+}
+
+function openScan(host){
+  scanHost=host; scanData=null; scanExpanded=new Set();
+  document.getElementById("scanTitle").textContent="Scansione — "+host;
+  document.getElementById("scanOvl").classList.add("on");
+  document.getElementById("scanDrawer").classList.add("on");
+  document.getElementById("scanBody").innerHTML=scanScanningHtml("caricamento…");
+  loadScan(true);
+}
+function closeScan(){
+  document.getElementById("scanOvl").classList.remove("on");
+  document.getElementById("scanDrawer").classList.remove("on");
+  if(scanTimer){ clearInterval(scanTimer); scanTimer=null; }
+  scanHost=null;
+}
+function scanScanningHtml(msg){
+  return `<div class="scan-scanning"><div class="radar"></div>
+    <div><b>${msg||"Scansione nmap in corso…"}</b></div>
+    <div style="margin-top:6px">rilevamento porte, servizi e sistema operativo · può richiedere 1–2 minuti</div></div>`;
+}
+
+async function loadScan(showLoading){
+  if(!scanHost) return;
+  try{
+    const r=await fetch("/api/scan?host="+encodeURIComponent(scanHost));
+    if(r.status===401){ return gotoLogin(); }
+    const j=await r.json();
+    if(!scanHost) return;              // drawer chiuso nel frattempo
+    scanData=j; renderScan(j);
+    if(j.running && !scanTimer){ scanTimer=setInterval(()=>loadScan(false), 3000); }
+    if(!j.running && scanTimer){ clearInterval(scanTimer); scanTimer=null; }
+  }catch(e){
+    if(showLoading) document.getElementById("scanBody").innerHTML=`<div class="scan-err">errore di rete</div>`;
+  }
+}
+
+async function rescan(){
+  if(!scanHost) return;
+  document.getElementById("scanBody").innerHTML=scanScanningHtml();
+  try{
+    const r=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({host:scanHost})});
+    const j=await r.json();
+    if(!r.ok){ document.getElementById("scanBody").innerHTML=`<div class="scan-err">⚠ ${escapeHtml(j.error||"errore")}</div>`; return; }
+    if(!scanTimer) scanTimer=setInterval(()=>loadScan(false), 3000);
+  }catch(e){ document.getElementById("scanBody").innerHTML=`<div class="scan-err">errore di rete</div>`; }
+}
+
+function renderScan(j){
+  const body=document.getElementById("scanBody");
+  const isAdmin = ME && ME.role==="admin";
+  // scansione in corso senza dati precedenti -> solo radar
+  if(j.running && (!j.result || j.status==="none")){ body.innerHTML=scanScanningHtml(); return; }
+  if(j.status==="none"){
+    body.innerHTML=`<div class="scan-none">nessuna scansione ancora eseguita per <b>${escapeHtml(j.host)}</b>.<br>
+      ${isAdmin?"":"in attesa della scansione automatica (ogni "+(j.interval_hours||6)+"h).<br>"}<br>
+      ${isAdmin?`<button class="rescan" data-rescan="1">🔍 Avvia scansione</button>`:""}</div>`;
+    return;
+  }
+  const res=j.result||{};
+  const rescanBtn = isAdmin
+    ? `<button class="rescan" data-rescan="1" ${j.running?"disabled":""}>${j.running?"scansione in corso…":"🔄 Rescan ora"}</button>` : "";
+  const ipObj=(res.addresses||[]).find(a=>a.type&&a.type.indexOf("ip")===0);
+  const ip = ipObj ? ipObj.addr : "";
+  const up = !!res.up;
+  const fresh = j.ts?`<div class="fresh">dati di <b>${ago(j.ts)}</b>`
+    +`${res.elapsed?`<br>scan ${res.elapsed.toFixed(0)}s`:(j.duration?`<br>${j.duration.toFixed(0)}s`:"")}`
+    +`${res.nmap_version?`<br>nmap ${escapeHtml(res.nmap_version)}`:""}</div>`:"";
+  const hero=`<div class="scan-hero"><div class="top">
+      <b style="font-size:16px">${escapeHtml(j.host)}</b>
+      ${ip?`<span class="ip">${escapeHtml(ip)}</span>`:""}
+      <span class="stpill ${up?"up":"down"}">${up?"● raggiungibile":"○ non raggiungibile"}</span>
+      ${fresh}</div>${rescanBtn}</div>`;
+
+  if(j.status==="error"){
+    body.innerHTML=hero+`<div class="scan-err">⚠ scansione fallita: ${escapeHtml(res.error||"errore")}</div>`;
+    return;
+  }
+
+  const ports=(res.ports||[]);
+  const withVer=ports.filter(p=>p.product||p.version).length;
+  const os=(res.os&&res.os[0])||null;
+  const nHs=(res.hostscripts||[]).length;
+
+  const stats=`<div class="dover">
+    <div class="stat"><div class="sv" style="color:var(--accent)">${ports.length}</div><div class="sl">Porte aperte</div></div>
+    <div class="stat"><div class="sv">${withVer}</div><div class="sl">Servizi id.</div></div>
+    <div class="stat"><div class="sv">${nHs}</div><div class="sl">Rilievi host</div></div>
+    ${res.extraports?`<div class="stat"><div class="sv" style="font-size:14px;padding-top:7px">${res.extraports.count}</div><div class="sl">${escapeHtml(res.extraports.state||"")}</div></div>`:""}
+  </div>`;
+
+  const osHtml = os?`<div class="scan-os"><div style="flex:1">
+      <div class="osname">🖥 ${escapeHtml(os.name||"?")}</div>
+      <div class="ossub">accuratezza OS detection</div>
+      <div class="accbar"><i style="width:${os.accuracy}%"></i></div>
+    </div><div style="font-size:22px;font-weight:700;color:var(--accent)">${os.accuracy}%</div></div>`:"";
+
+  let grid, plist="";
+  if(ports.length){
+    grid=`<div class="dwsec first">Porte aperte</div><div class="portgrid">`+
+      ports.map(p=>{ const c=portColor(p.port,p.service);
+        return `<div class="pchip" style="border-left-color:${c}"><div class="pn">${p.port}</div>
+          <div class="ps" title="${escapeHtml(p.service||"")}">${escapeHtml(p.service||p.proto||"?")}</div></div>`;
+      }).join("")+`</div>`;
+    plist=`<div class="dwsec">Dettaglio servizi</div><div class="plist">`+
+      ports.map(p=>{
+        const exp=scanExpanded.has(p.port);
+        const svc=escapeHtml(p.service||p.proto||"?");
+        const ver=[p.product,p.version,p.extrainfo?("("+p.extrainfo+")"):""].filter(Boolean).map(escapeHtml).join(" ");
+        const hasDet=(p.cpe&&p.cpe.length)||(p.scripts&&p.scripts.length)||!!p.reason;
+        let det="";
+        if(exp&&hasDet){
+          det=`<div class="det">`;
+          if(p.reason) det+=`<div style="color:var(--mut);font-size:11px">stato ${escapeHtml(p.state||"")} (${escapeHtml(p.reason)})${p.tunnel?" · "+escapeHtml(p.tunnel):""}</div>`;
+          (p.cpe||[]).forEach(c=>det+=`<div class="cpe">${escapeHtml(c)}</div>`);
+          (p.scripts||[]).forEach(s=>{ det+=`<div class="sid">▸ ${escapeHtml(s.id)}</div><pre>${escapeHtml(s.output||"")}</pre>`; });
+          det+=`</div>`;
+        }
+        const chev=hasDet?(" "+(exp?"▲":"▼")):"";
+        return `<div class="pitem"><div class="ph${hasDet?" click":""}" ${hasDet?`data-pexp="${p.port}"`:""}>
+          <span class="p" style="color:${portColor(p.port,p.service)}">${p.port}/${escapeHtml(p.proto||"tcp")}</span>
+          <span class="svc">${svc}</span>
+          <span class="ver">${ver}${chev}</span>
+        </div>${det}</div>`;
+      }).join("")+`</div>`;
+  } else {
+    grid=`<div class="dwsec first">Porte</div><div class="scan-none" style="padding:14px">`
+      +`nessuna porta aperta tra quelle scansionate${res.extraports?` (${res.extraports.count} ${escapeHtml(res.extraports.state||"")})`:""}</div>`;
+  }
+
+  let hs="";
+  if(nHs){
+    hs=`<div class="dwsec">Rilievi host (script NSE)</div>`+
+      res.hostscripts.map(s=>`<div class="hs-item"><div class="hid">▸ ${escapeHtml(s.id)}</div><pre>${escapeHtml(s.output||"")}</pre></div>`).join("");
+  }
+
+  body.innerHTML = hero+stats+osHtml+grid+plist+hs;
+}
 
 async function loadMe(){
   try{
