@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.6"
+VERSION = "v2.7"
 BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
@@ -56,6 +56,8 @@ NMAP_TOP_PORTS = int(os.environ.get("MON_NMAP_TOP_PORTS", "1000"))      # profon
 NMAP_DEEP = os.environ.get("MON_NMAP_DEEP", "0") not in ("0", "false", "no", "")  # tutte le 65535 porte
 # NB: vulners interroga vulners.com via internet (CPE->CVE) -> NON è più on-premise
 NMAP_VULN = os.environ.get("MON_NMAP_VULN", "0") not in ("0", "false", "no", "")
+# tetto CVE per porta (0 = nessun tetto -> conteggi onesti; >0 = limita per payload)
+NMAP_VULN_CAP = int(os.environ.get("MON_NMAP_VULN_CAP", "0"))
 DB_PATH = os.path.join(DATA_DIR, "metrics.db")
 KNOWN_HOSTS = os.path.join(DATA_DIR, "known_hosts")
 HOSTS_FILE = os.path.join(DATA_DIR, "hosts.json")
@@ -526,15 +528,123 @@ def _parse_vulners(script_el):
     return out
 
 
-def _dedup_vulns(vulns, cap=25):
-    """Deduplica per CVE tenendo il CVSS più alto, ordina per gravità, limita a `cap`."""
+def _dedup_vulns(vulns):
+    """Deduplica per CVE tenendo il CVSS più alto e ordina per gravità.
+    Nessun tetto se NMAP_VULN_CAP<=0 (conteggi onesti), altrimenti limita al cap."""
     seen = {}
     for v in vulns:
         k = v["id"]
         if k not in seen or (v.get("cvss") or 0) > (seen[k].get("cvss") or 0):
             seen[k] = v
     arr = sorted(seen.values(), key=lambda x: (-(x.get("cvss") or 0), x["id"]))
-    return arr[:cap]
+    return arr if NMAP_VULN_CAP <= 0 else arr[:NMAP_VULN_CAP]
+
+
+# mappa prodotto -> pacchetto APT (i server sono Ubuntu): remediation via apt-get
+_APT_PKG = [
+    ("openssh", "openssh-server"), ("nginx", "nginx"), ("apache", "apache2"),
+    ("httpd", "apache2"), ("postfix", "postfix"), ("dovecot", "dovecot-core"),
+    ("postgresql", "postgresql"), ("mariadb", "mariadb-server"), ("mysql", "mysql-server"),
+    ("exim", "exim4"), ("bind", "bind9"), ("openssl", "openssl"), ("vsftpd", "vsftpd"),
+    ("proftpd", "proftpd-basic"), ("samba", "samba"), ("redis", "redis-server"),
+    ("memcached", "memcached"), ("php", "php"),
+]
+# prodotti applicativi non gestiti da APT (dipendenze del progetto)
+_APP_HINT = {
+    "werkzeug": ("Python", "pip install -U werkzeug   # poi aggiorna requirements.txt e ridispiega"),
+    "uvicorn":  ("Python", "pip install -U uvicorn"),
+    "gunicorn": ("Python", "pip install -U gunicorn"),
+    "flask":    ("Python", "pip install -U flask"),
+    "django":   ("Python", "pip install -U django"),
+    "tornado":  ("Python", "pip install -U tornado"),
+    "basehttpserver": ("Python", "è il server stdlib di gp-monitor stesso: aggiorna Python base image e ridispiega il container"),
+    "simplehttp": ("Python", "server stdlib: aggiorna la base image Python e ridispiega"),
+    "golang":   ("Go", "aggiorna il modulo/binario Go e ricompila: go get -u ./... && go build"),
+    "node":     ("Node", "npm update (o aggiorna package.json) e ridispiega"),
+    "express":  ("Node", "npm update express"),
+}
+
+
+def _rem_sev(cvss, exploit):
+    if exploit or (cvss or 0) >= 9:
+        return "high"
+    if (cvss or 0) >= 7:
+        return "med"
+    return "low"
+
+
+def build_remediation(result):
+    """Genera remediation azionabili DAL risultato dello scan (deterministico, no LLM):
+    per ogni servizio con CVE deduce il pacchetto APT o la dipendenza applicativa,
+    i comandi concreti e la priorità (exploit noto / CVSS)."""
+    if not result:
+        return None
+    items, total_cve, total_expl = [], 0, 0
+    for p in result.get("ports", []):
+        vulns = p.get("vulns") or []
+        if not vulns:
+            continue
+        total_cve += len(vulns)
+        expl = sum(1 for v in vulns if v.get("exploit"))
+        total_expl += expl
+        maxc = max((v.get("cvss") or 0) for v in vulns)
+        product = (p.get("product") or p.get("service") or "").strip()
+        plow = product.lower().replace(" ", "").replace("/", "")
+        pkg, kind, cmds = None, "manual", []
+        # 1) framework applicativi (più specifici) PRIMA di APT: es. "Werkzeug httpd"
+        #    contiene "httpd" ma NON è Apache -> va gestito come dipendenza Python.
+        hint = None
+        for key, val in _APP_HINT.items():
+            if key in plow:
+                hint = val
+                break
+        if not hint:
+            for key, pk in _APT_PKG:
+                if key in plow:
+                    pkg = pk
+                    break
+        if pkg:
+            kind = "apt"
+            svc = "ssh" if pkg == "openssh-server" else pkg.split("-")[0]
+            cmds = [
+                "sudo apt-get update",
+                "sudo apt-get install --only-upgrade %s" % pkg,
+                "# verifica se la CVE è già chiusa dal backport Ubuntu:",
+                "apt-get changelog %s | grep -i cve | head" % pkg,
+                "sudo systemctl restart %s" % svc,
+            ]
+            action = ("Aggiorna **%s** via APT. Ubuntu applica i backport di sicurezza "
+                      "mantenendo il numero di versione upstream: se dopo l'update la CVE "
+                      "resta segnalata è quasi sempre un **falso positivo**." % pkg)
+        elif hint:
+            kind = "app"
+            cmds = [hint[1]]
+            action = ("Servizio applicativo **%s** (%s): non si aggiorna via APT, "
+                      "aggiorna la dipendenza nel progetto e ridispiega." % (product, hint[0]))
+        else:
+            action = ("Identifica il fornitore di **%s** (porta %s) e applica "
+                      "l'aggiornamento di sicurezza consigliato." % (product or "servizio", p.get("port")))
+        cves = sorted(vulns, key=lambda v: (not v.get("exploit"), -(v.get("cvss") or 0)))
+        items.append({
+            "sev": _rem_sev(maxc, expl), "port": p.get("port"), "proto": p.get("proto"),
+            "service": product or p.get("service"), "pkg": pkg, "kind": kind,
+            "max_cvss": maxc, "exploit": expl, "cve_count": len(vulns),
+            "action": action, "commands": cmds,
+            "cves": [{"id": v["id"], "cvss": v.get("cvss"), "exploit": bool(v.get("exploit"))}
+                     for v in cves[:8]],
+        })
+    order = {"high": 0, "med": 1, "low": 2}
+    items.sort(key=lambda x: (order.get(x["sev"], 3), -(x["max_cvss"] or 0)))
+    notes = [
+        "I rilievi di `vulners` sono **potenziali falsi positivi**: correlano per versione "
+        "upstream e NON tengono conto dei backport di Ubuntu (pacchetti `...ubuntuX.Y`). "
+        "Verifica sempre con `apt-get changelog <pkg>`.",
+        "Dai **priorità** alle CVE con **exploit noto** (⚡) e CVSS ≥ 9.",
+        "Base: `sudo apt-get update && sudo apt-get full-upgrade` e reboot se aggiornato il kernel.",
+        "Riduci la superficie: filtra/chiudi le porte non necessarie esposte oltre Tailscale.",
+    ]
+    return {"items": items, "notes": notes,
+            "totals": {"cve": total_cve, "exploit": total_expl, "services": len(items)}}
 
 
 def parse_nmap_xml(xml_text):
@@ -801,6 +911,7 @@ class Handler(BaseHTTPRequestHandler):
                 resp.update({"ts": cur["ts"], "age": now - cur["ts"],
                              "duration": cur["duration"], "status": cur["status"],
                              "result": cur["result"]})
+                resp["remediation"] = build_remediation(cur["result"])
             else:
                 resp["status"] = "none"
             self._json(200, resp)

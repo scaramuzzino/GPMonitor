@@ -334,6 +334,30 @@
     padding:1px 7px;margin-left:6px;font-family:ui-monospace,Menlo,monospace}
   .pchip .pv{position:absolute;top:-6px;right:-6px;background:#f85149;color:#fff;font-size:9.5px;
     font-weight:700;border-radius:20px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px}
+  /* ---- remediation ---- */
+  .scan-hero .hero-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .rembtn{background:#161b22;border-color:#2ea043;color:#3fb950}
+  .rembtn:hover{background:#0f2417}
+  .rembtn.active{background:#2ea043;color:#062011;font-weight:700}
+  .remnotes{background:#161b22;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .remnotes b{font-size:12px;color:var(--warn)}
+  .remnotes ul{margin:6px 0 0;padding-left:18px}
+  .remnotes li{font-size:12px;color:var(--fg);line-height:1.55;margin:3px 0}
+  .remitem{border:1px solid var(--line);border-left:3px solid var(--mut);border-radius:10px;
+    padding:11px 13px;margin-bottom:10px;background:#0d1117}
+  .remhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .remhead b{font-size:13.5px}
+  .rsev{color:#0b0f14;font-weight:700;font-size:10px;letter-spacing:.4px;border-radius:20px;padding:2px 8px}
+  .remhead .rport{color:var(--mut);font-size:11.5px}
+  .remhead .rmeta{margin-left:auto;color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums}
+  .rk{font-size:10px;font-weight:600;border-radius:6px;padding:1px 7px;border:1px solid var(--line)}
+  .rk.apt{color:#58a6ff;border-color:#1f6feb} .rk.app{color:#bc8cff;border-color:#8957e5} .rk.man{color:var(--mut)}
+  .remaction{font-size:12.5px;line-height:1.55;margin:9px 0 0;color:var(--fg)}
+  .remaction code,.remnotes code,.remcmd{font-family:ui-monospace,Menlo,monospace}
+  .remaction code,.remnotes code{background:#161b22;border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:11.5px}
+  .remcmd{background:#010409;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:9px;
+    font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#7ee787;overflow-x:auto}
+  .remcmd .cmt{color:var(--mut)}
   .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
   .scan-scanning b{color:var(--fg)}
   .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
@@ -475,6 +499,8 @@ function pct(n){ return n==null?"—":n.toFixed(0)+"%"; }
 function ago(ts){ const s=Math.floor(Date.now()/1000)-ts; if(s<60)return s+"s fa"; if(s<3600)return Math.floor(s/60)+"m fa"; return Math.floor(s/3600)+"h fa"; }
 function barClass(p){ return p>=90?"bar bad":p>=75?"bar warn":"bar"; }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// mini-markdown: **grassetto** e `codice` (dopo escape)
+function mdBold(s){ return escapeHtml(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>'); }
 function hm(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes()); }
 function hms(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
 
@@ -942,7 +968,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-pexp]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -973,6 +999,7 @@ document.addEventListener("click", e=>{
     renderFlow(); }
   else if(t.dataset.scan){ openScan(t.dataset.scan); }
   else if(t.dataset.rescan){ rescan(); }
+  else if(t.dataset.remview){ scanView=t.dataset.remview; if(scanData) renderScan(scanData); }
   else if(t.dataset.pexp){ const p=+t.dataset.pexp;
     scanExpanded.has(p)?scanExpanded.delete(p):scanExpanded.add(p);
     if(scanData) renderScan(scanData); }
@@ -1197,6 +1224,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeUsers(); clo
 // ------------------------------------------------------------ scansione nmap (drawer)
 let scanHost=null, scanTimer=null, scanData=null;
 let scanExpanded=new Set();   // porte con dettaglio espanso
+let scanView="report";        // "report" | "remediation"
 
 // famiglie di porte -> colore (overview a colpo d'occhio)
 const PORT_FAMILY = {
@@ -1231,7 +1259,7 @@ function topCves(res){
 }
 
 function openScan(host){
-  scanHost=host; scanData=null; scanExpanded=new Set();
+  scanHost=host; scanData=null; scanExpanded=new Set(); scanView="report";
   document.getElementById("scanTitle").textContent="Status — "+host;
   document.getElementById("scanOvl").classList.add("on");
   document.getElementById("scanDrawer").classList.add("on");
@@ -1291,6 +1319,9 @@ function renderScan(j){
   const res=j.result||{};
   const rescanBtn = isAdmin
     ? `<button class="rescan" data-rescan="1" ${j.running?"disabled":""}>${j.running?"scansione in corso…":"🔄 Rescan ora"}</button>` : "";
+  const remN = (j.remediation&&j.remediation.items) ? j.remediation.items.length : 0;
+  const remBtn = remN
+    ? `<button class="rescan rembtn ${scanView==='remediation'?'active':''}" data-remview="${scanView==='remediation'?'report':'remediation'}">${scanView==='remediation'?'‹ Torna al report':'🛡 Remediation ('+remN+')'}</button>` : "";
   const ipObj=(res.addresses||[]).find(a=>a.type&&a.type.indexOf("ip")===0);
   const ip = ipObj ? ipObj.addr : "";
   const up = !!res.up;
@@ -1301,12 +1332,14 @@ function renderScan(j){
       <b style="font-size:16px">${escapeHtml(j.host)}</b>
       ${ip?`<span class="ip">${escapeHtml(ip)}</span>`:""}
       <span class="stpill ${up?"up":"down"}">${up?"● raggiungibile":"○ non raggiungibile"}</span>
-      ${fresh}</div>${rescanBtn}</div>`;
+      ${fresh}</div><div class="hero-btns">${rescanBtn}${remBtn}</div></div>`;
 
   if(j.status==="error"){
     body.innerHTML=hero+`<div class="scan-err">⚠ scansione fallita: ${escapeHtml(res.error||"errore")}</div>`;
     return;
   }
+
+  if(scanView==="remediation"){ body.innerHTML=hero+remediationHtml(j.remediation); return; }
 
   const ports=(res.ports||[]);
   const withVer=ports.filter(p=>p.product||p.version).length;
@@ -1335,7 +1368,7 @@ function renderScan(j){
           <span class="cvp">porta ${[...v.ports].sort((a,b)=>a-b).join(", ")}</span>
         </a>`).join("")
       + (cves.length>60?`<div class="cvmore">…e altre ${cves.length-60}</div>`:"")
-      + `</div><div class="cvnote">⚠ Correlazione via script NSE <b>vulners</b> (CPE→CVE): interroga vulners.com (uscita internet). Disattivabile da ⚙ Config.</div>`;
+      + `</div><div class="cvnote">⚠ Correlazione via script NSE <b>vulners</b> (CPE→CVE): interroga vulners.com (uscita internet). Si basa sulla <b>versione upstream</b> e <b>non tiene conto dei backport di sicurezza di Ubuntu</b> → molti rilievi possono essere <b>falsi positivi</b>. Priorità a quelli con <b>exploit noto (⚡)</b>. Usa <b>🛡 Remediation</b> per le azioni. Disattivabile da ⚙ Config.</div>`;
   }
 
   const osHtml = os?`<div class="scan-os"><div style="flex:1">
@@ -1389,6 +1422,37 @@ function renderScan(j){
   }
 
   body.innerHTML = hero+stats+osHtml+cvesec+grid+plist+hs;
+}
+
+function remediationHtml(rem){
+  if(!rem || !rem.items || !rem.items.length){
+    return `<div class="scan-none" style="padding:24px">Nessuna remediation da applicare: nessun servizio con CVE correlate.<br>
+      <span style="font-size:12px">(se la correlazione CVE è disattivata, attivala da ⚙ Config e rilancia lo scan)</span></div>`;
+  }
+  const t=rem.totals||{};
+  const sevLabel={high:"ALTA",med:"MEDIA",low:"BASSA"}, sevColor={high:"#f85149",med:"#f0883e",low:"#d29922"};
+  let h=`<div class="dwsec first">Remediation <span class="cvsub">${rem.items.length} servizi · ${t.cve||0} CVE${t.exploit?` · ${t.exploit} con exploit noto ⚡`:""}</span></div>`;
+  h+=`<div class="remnotes"><b>Note & priorità</b><ul>`+rem.notes.map(n=>`<li>${mdBold(n)}</li>`).join("")+`</ul></div>`;
+  h+=rem.items.map(it=>{
+    const col=sevColor[it.sev]||"#6e7681";
+    const cmds=(it.commands||[]).map(c=>c.trim().startsWith("#")?`<span class="cmt">${escapeHtml(c)}</span>`:escapeHtml(c)).join("\n");
+    const kindTag=it.kind==="apt"?`<span class="rk apt">APT · ${escapeHtml(it.pkg||"")}</span>`
+      :it.kind==="app"?`<span class="rk app">app</span>`:`<span class="rk man">manuale</span>`;
+    const cves=(it.cves||[]).map(v=>`<a class="cvchip" href="${cveLink(v.id)}" target="_blank" rel="noopener" style="border-color:${cveColor(v.cvss)}"><b style="color:${cveColor(v.cvss)}">${v.cvss!=null?v.cvss.toFixed(1):"·"}</b>${escapeHtml(v.id)}${v.exploit?" ⚡":""}</a>`).join("");
+    return `<div class="remitem" style="border-left-color:${col}">
+      <div class="remhead">
+        <span class="rsev" style="background:${col}">${sevLabel[it.sev]||it.sev}</span>
+        <b>${escapeHtml(it.service||"?")}</b>
+        <span class="rport">porta ${it.port}/${escapeHtml(it.proto||"tcp")}</span>
+        ${kindTag}
+        <span class="rmeta">${it.cve_count} CVE · max ${it.max_cvss?it.max_cvss.toFixed(1):"—"}${it.exploit?` · ${it.exploit} ⚡`:""}</span>
+      </div>
+      <div class="remaction">${mdBold(it.action)}</div>
+      ${cmds?`<pre class="remcmd">${cmds}</pre>`:""}
+      ${cves?`<div class="pvulns" style="margin-top:8px">${cves}</div>`:""}
+    </div>`;
+  }).join("");
+  return h;
 }
 
 async function loadMe(){

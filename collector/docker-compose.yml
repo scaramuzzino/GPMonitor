@@ -28,6 +28,8 @@ services:
       # correlazione CVE via NSE vulners (CPE->CVE). NB: interroga vulners.com (non on-premise).
       # È il seed iniziale: poi il toggle vive in Config e viene persistito in kv['nmap_vuln'].
       MON_NMAP_VULN: "1"
+      # tetto CVE per porta: 0 = nessun tetto (conteggi onesti)
+      MON_NMAP_VULN_CAP: "0"
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:
