@@ -19,10 +19,15 @@ services:
       MON_BIND: "10.0.0.2:8888"
       MON_INTERVAL: "15"
       MON_RETENTION_HOURS: "48"
-      # scansione nmap (agentless, offline): rescan automatico ogni 6h + on-demand dal drawer
+      # scansione nmap (agentless): rescan automatico ogni 6h + on-demand dal drawer
       MON_NMAP: "1"
       MON_NMAP_INTERVAL_HOURS: "6"
       MON_NMAP_TOP_PORTS: "1000"
+      # profondità piena: -p- (tutte le 65535 porte)
+      MON_NMAP_DEEP: "1"
+      # correlazione CVE via NSE vulners (CPE->CVE). NB: interroga vulners.com (non on-premise).
+      # È il seed iniziale: poi il toggle vive in Config e viene persistito in kv['nmap_vuln'].
+      MON_NMAP_VULN: "1"
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:

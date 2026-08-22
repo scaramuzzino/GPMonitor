@@ -12,8 +12,11 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);
        font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;align-items:baseline;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line)}
-  header h1{font-size:18px;margin:0;font-weight:600}
+  header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line)}
+  header .brand{display:flex;flex-direction:column;gap:1px}
+  header .brand .top{display:flex;align-items:center;gap:9px}
+  header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .brand .au{color:var(--mut);font-size:11.5px;font-weight:500}
   header .meta{color:var(--mut);font-size:12px}
   .content{padding:18px;display:flex;flex-direction:column;gap:16px}
 
@@ -183,11 +186,27 @@
   .setup pre{background:#0d1117;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;
              font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--fg)}
   .setup .k{color:var(--mut);font-size:11.5px;margin:8px 0 3px}
+  /* ---- impostazioni (toggle CVE) ---- */
+  .cfgset{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .cfgset .st{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+  .setrow{display:flex;align-items:flex-start;gap:12px;padding:6px 0}
+  .setrow .txt{flex:1}
+  .setrow .txt b{font-size:13px}
+  .setrow .txt small{display:block;color:var(--mut);font-size:11px;line-height:1.5;margin-top:2px}
+  .sw{position:relative;flex-shrink:0;width:42px;height:23px;cursor:pointer;margin-top:2px}
+  .sw input{position:absolute;opacity:0;width:0;height:0}
+  .sw .track{position:absolute;inset:0;background:#30363d;border-radius:20px;transition:background .15s}
+  .sw .knob{position:absolute;top:2px;left:2px;width:19px;height:19px;background:#fff;border-radius:50%;transition:transform .15s}
+  .sw input:checked+.track{background:var(--ok)}
+  .sw input:checked+.track+.knob{transform:translateX(19px)}
+  .sw.busy{opacity:.5;pointer-events:none}
 
-  /* ---- versione / autore in testata ---- */
-  header .ver{color:var(--mut);font-size:11px;line-height:1.25}
-  header .ver b{color:var(--fg);font-weight:600}
-  header .ver .au{color:var(--accent)}
+  /* ---- badge versione verde in testata ---- */
+  header .verbadge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;
+    color:#062011;background:linear-gradient(180deg,#3fb950,#2ea043);
+    border:1px solid #2ea043;border-radius:20px;padding:2px 9px;line-height:1.2;
+    box-shadow:0 1px 4px rgba(46,160,67,.35)}
+  header .verbadge:empty{display:none}
 
   /* ---- gestione utenti: azioni extra ---- */
   .usr .badge.admin{color:var(--accent);border-color:var(--accent)}
@@ -274,7 +293,7 @@
   .scan-os .accbar{margin-top:6px;height:6px;border-radius:3px;background:#21262d;overflow:hidden;max-width:220px}
   .scan-os .accbar>i{display:block;height:100%;background:var(--accent)}
   .portgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-bottom:4px}
-  .pchip{background:#0d1117;border:1px solid var(--line);border-left:3px solid var(--mut);border-radius:8px;
+  .pchip{position:relative;background:#0d1117;border:1px solid var(--line);border-left:3px solid var(--mut);border-radius:8px;
         padding:7px 9px;line-height:1.25;overflow:hidden}
   .pchip .pn{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
   .pchip .ps{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.02em;
@@ -293,6 +312,28 @@
         overflow:auto;font-size:11px;white-space:pre-wrap;word-break:break-word;margin:5px 0 0;color:var(--fg)}
   .hs-item{border-top:1px solid #21262d;padding:8px 2px}
   .hs-item .hid{color:var(--warn);font-weight:600;font-size:12px}
+  /* ---- CVE / vulnerabilità ---- */
+  .dwsec .cvsub{color:var(--mut);text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px}
+  .cvelist{display:flex;flex-direction:column;gap:5px}
+  .cverow{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--line);
+    border-radius:8px;background:#0d1117;text-decoration:none;color:var(--fg);transition:border-color .12s}
+  .cverow:hover{border-color:var(--accent)}
+  .cvbadge{min-width:34px;text-align:center;font-weight:700;font-size:11.5px;color:#0b0f14;
+    border-radius:6px;padding:2px 4px;font-variant-numeric:tabular-nums}
+  .cverow .cid{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600}
+  .cverow .expl{font-size:10.5px;font-weight:700;color:#f85149;border:1px solid #f85149;
+    border-radius:20px;padding:1px 7px}
+  .cverow .cvp{margin-left:auto;color:var(--mut);font-size:11px}
+  .cvmore{color:var(--mut);font-size:11.5px;text-align:center;padding:6px}
+  .cvnote{color:var(--mut);font-size:11px;margin-top:8px;line-height:1.5;opacity:.85}
+  .pvulns{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .cvchip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:ui-monospace,Menlo,monospace;
+    border:1px solid var(--line);border-radius:20px;padding:2px 9px;text-decoration:none;color:var(--fg)}
+  .cvchip:hover{background:#0d1117}
+  .pitem .ph .ver .vbadge{color:#0b0f14;font-weight:700;font-size:10px;border-radius:20px;
+    padding:1px 7px;margin-left:6px;font-family:ui-monospace,Menlo,monospace}
+  .pchip .pv{position:absolute;top:-6px;right:-6px;background:#f85149;color:#fff;font-size:9.5px;
+    font-weight:700;border-radius:20px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px}
   .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
   .scan-scanning b{color:var(--fg)}
   .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
@@ -308,8 +349,10 @@
 </head>
 <body>
 <header>
-  <h1>GP&nbsp;monitor</h1>
-  <span class="ver" id="ver"></span>
+  <div class="brand">
+    <div class="top"><h1>GP&nbsp;monitor</h1><span class="verbadge" id="ver"></span></div>
+    <div class="au">Stefano Scaramuzzino</div>
+  </div>
   <span class="meta" id="meta">avvio…</span>
   <span class="who" id="who"></span>
   <button class="gear" id="usersBtn" style="display:none">👥 Utenti</button>
@@ -394,6 +437,7 @@
       <summary>Installazione manuale della sonda (chiave + comando forzato)</summary>
       <div id="cfgSetup"></div>
     </details>
+    <div id="cfgSettings"></div>
   </div>
 </div>
 
@@ -417,7 +461,7 @@
 <!-- drawer scansione nmap (report per server) -->
 <div class="drawer-ovl" id="scanOvl"></div>
 <aside class="drawer wide" id="scanDrawer" aria-hidden="true">
-  <div class="dwh">🔍 <b id="scanTitle">Scansione</b><span class="x" id="scanX">✕</span></div>
+  <div class="dwh">📊 <b id="scanTitle">Status</b><span class="x" id="scanX">✕</span></div>
   <div class="dwbody" id="scanBody"></div>
 </aside>
 
@@ -686,7 +730,7 @@ function enhPill(name){
 }
 function scanBtn(name){
   return `<span class="scanbtn" data-scan="${escapeHtml(name)}"
-    title="scansione nmap di ${escapeHtml(name)} (porte, servizi, OS)">🔍 Scan</span>`;
+    title="stato & scansione nmap di ${escapeHtml(name)} (porte, servizi, OS, CVE)">📊 Status</span>`;
 }
 function hostCard(name, d){
   if(!d || d.error){
@@ -952,6 +996,40 @@ async function loadCfg(){
       || `<div class="empty">nessun server</div>`;
   }catch(e){ document.getElementById("cfgList").innerHTML=`<div class="err">errore nel caricamento</div>`; }
   loadSetup();
+  loadSettings();
+}
+async function loadSettings(){
+  const el=document.getElementById("cfgSettings");
+  if(!(ME&&ME.role==="admin")){ el.innerHTML=""; return; }
+  try{
+    const s=await (await fetch("/api/settings")).json();
+    if(!s.nmap_enabled){ el.innerHTML=""; return; }
+    el.innerHTML=`<div class="cfgset"><div class="st">Scansione nmap</div>
+      <div class="setrow">
+        <div class="txt"><b>Correlazione CVE (vulners)</b>
+          <small>Innesta lo script NSE <b>vulners</b> (CPE→CVE) per elencare le vulnerabilità note dei servizi.
+          ⚠ Interroga <b>vulners.com</b> via internet: non è più 100% on-premise.
+          ${s.nmap_deep?"Scansione a profondità piena (tutte le porte).":""}</small></div>
+        <label class="sw" id="swVulnW"><input type="checkbox" id="swVuln" ${s.nmap_vuln?"checked":""}>
+          <span class="track"></span><span class="knob"></span></label>
+      </div></div>`;
+    document.getElementById("swVuln").addEventListener("change", toggleVuln);
+  }catch(e){ el.innerHTML=""; }
+}
+async function toggleVuln(e){
+  const on=e.target.checked, wrap=document.getElementById("swVulnW");
+  wrap.classList.add("busy");
+  try{
+    const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({nmap_vuln:on})});
+    if(!r.ok){ e.target.checked=!on; const m=document.getElementById("cfgMsg");
+      m.textContent="⚠ impossibile salvare l'impostazione"; m.className="msg err"; }
+    else{ const m=document.getElementById("cfgMsg");
+      m.textContent=on?"✓ CVE attivate — verranno correlate alla prossima scansione (fai Rescan per applicarle subito)"
+        :"✓ CVE disattivate — le prossime scansioni resteranno on-premise";
+      m.className="msg ok"; }
+  }catch(err){ e.target.checked=!on; }
+  wrap.classList.remove("busy");
 }
 
 // ------------------------------------------------------------ gestione utenti (drawer, solo admin)
@@ -1138,10 +1216,23 @@ function portColor(p, svc){
   if(/dns|ntp|snmp|wireguard|ipsec/.test(svc)) return PORT_FAMILY.net.c;
   return "#6e7681";
 }
+// ---- CVE (vulners) ----
+function cveColor(s){ if(s==null) return "#6e7681"; if(s>=9) return "#f85149"; if(s>=7) return "#f0883e"; if(s>=4) return "#d29922"; return "#3fb950"; }
+function cveLink(id){ return /^CVE-/i.test(id) ? "https://nvd.nist.gov/vuln/detail/"+encodeURIComponent(id)
+  : "https://vulners.com/search?query="+encodeURIComponent(id); }
+function topCves(res){
+  const m=new Map();
+  (res.ports||[]).forEach(p=>(p.vulns||[]).forEach(v=>{
+    const e=m.get(v.id);
+    if(!e){ m.set(v.id,{id:v.id,cvss:v.cvss,exploit:!!v.exploit,ports:new Set([p.port])}); }
+    else{ if((v.cvss||0)>(e.cvss||0)) e.cvss=v.cvss; e.exploit=e.exploit||!!v.exploit; e.ports.add(p.port); }
+  }));
+  return [...m.values()].sort((a,b)=>(b.cvss||0)-(a.cvss||0)||a.id.localeCompare(b.id));
+}
 
 function openScan(host){
   scanHost=host; scanData=null; scanExpanded=new Set();
-  document.getElementById("scanTitle").textContent="Scansione — "+host;
+  document.getElementById("scanTitle").textContent="Status — "+host;
   document.getElementById("scanOvl").classList.add("on");
   document.getElementById("scanDrawer").classList.add("on");
   document.getElementById("scanBody").innerHTML=scanScanningHtml("caricamento…");
@@ -1156,7 +1247,7 @@ function closeScan(){
 function scanScanningHtml(msg){
   return `<div class="scan-scanning"><div class="radar"></div>
     <div><b>${msg||"Scansione nmap in corso…"}</b></div>
-    <div style="margin-top:6px">rilevamento porte, servizi e sistema operativo · può richiedere 1–2 minuti</div></div>`;
+    <div style="margin-top:6px">scansione completa (tutte le 65535 porte), servizi, OS e CVE · può richiedere diversi minuti</div></div>`;
 }
 
 async function loadScan(showLoading){
@@ -1221,13 +1312,31 @@ function renderScan(j){
   const withVer=ports.filter(p=>p.product||p.version).length;
   const os=(res.os&&res.os[0])||null;
   const nHs=(res.hostscripts||[]).length;
+  const cves=topCves(res);
+  const critCnt=cves.filter(v=>(v.cvss||0)>=7).length;
+  const explCnt=cves.filter(v=>v.exploit).length;
 
   const stats=`<div class="dover">
     <div class="stat"><div class="sv" style="color:var(--accent)">${ports.length}</div><div class="sl">Porte aperte</div></div>
     <div class="stat"><div class="sv">${withVer}</div><div class="sl">Servizi id.</div></div>
+    ${cves.length?`<div class="stat"><div class="sv" style="color:${cveColor(cves[0].cvss)}">${cves.length}</div><div class="sl">CVE${explCnt?` · ${explCnt}⚡`:""}</div></div>`:""}
     <div class="stat"><div class="sv">${nHs}</div><div class="sl">Rilievi host</div></div>
     ${res.extraports?`<div class="stat"><div class="sv" style="font-size:14px;padding-top:7px">${res.extraports.count}</div><div class="sl">${escapeHtml(res.extraports.state||"")}</div></div>`:""}
   </div>`;
+
+  let cvesec="";
+  if(cves.length){
+    cvesec=`<div class="dwsec">Vulnerabilità correlate (CVE)<span class="cvsub">${cves.length} totali · ${critCnt} ad alto rischio${explCnt?` · ${explCnt} con exploit noto`:""}</span></div>`
+      +`<div class="cvelist">`
+      + cves.slice(0,60).map(v=>`<a class="cverow" href="${cveLink(v.id)}" target="_blank" rel="noopener">
+          <span class="cvbadge" style="background:${cveColor(v.cvss)}">${v.cvss!=null?v.cvss.toFixed(1):"n/d"}</span>
+          <span class="cid">${escapeHtml(v.id)}</span>
+          ${v.exploit?`<span class="expl">⚡ exploit</span>`:""}
+          <span class="cvp">porta ${[...v.ports].sort((a,b)=>a-b).join(", ")}</span>
+        </a>`).join("")
+      + (cves.length>60?`<div class="cvmore">…e altre ${cves.length-60}</div>`:"")
+      + `</div><div class="cvnote">⚠ Correlazione via script NSE <b>vulners</b> (CPE→CVE): interroga vulners.com (uscita internet). Disattivabile da ⚙ Config.</div>`;
+  }
 
   const osHtml = os?`<div class="scan-os"><div style="flex:1">
       <div class="osname">🖥 ${escapeHtml(os.name||"?")}</div>
@@ -1238,8 +1347,8 @@ function renderScan(j){
   let grid, plist="";
   if(ports.length){
     grid=`<div class="dwsec first">Porte aperte</div><div class="portgrid">`+
-      ports.map(p=>{ const c=portColor(p.port,p.service);
-        return `<div class="pchip" style="border-left-color:${c}"><div class="pn">${p.port}</div>
+      ports.map(p=>{ const c=portColor(p.port,p.service); const nv=(p.vulns||[]).length;
+        return `<div class="pchip" style="border-left-color:${c}">${nv?`<span class="pv" title="${nv} CVE">${nv}</span>`:""}<div class="pn">${p.port}</div>
           <div class="ps" title="${escapeHtml(p.service||"")}">${escapeHtml(p.service||p.proto||"?")}</div></div>`;
       }).join("")+`</div>`;
     plist=`<div class="dwsec">Dettaglio servizi</div><div class="plist">`+
@@ -1247,20 +1356,25 @@ function renderScan(j){
         const exp=scanExpanded.has(p.port);
         const svc=escapeHtml(p.service||p.proto||"?");
         const ver=[p.product,p.version,p.extrainfo?("("+p.extrainfo+")"):""].filter(Boolean).map(escapeHtml).join(" ");
-        const hasDet=(p.cpe&&p.cpe.length)||(p.scripts&&p.scripts.length)||!!p.reason;
+        const nv=(p.vulns||[]).length;
+        const hasDet=(p.cpe&&p.cpe.length)||(p.scripts&&p.scripts.length)||!!p.reason||nv;
         let det="";
         if(exp&&hasDet){
           det=`<div class="det">`;
           if(p.reason) det+=`<div style="color:var(--mut);font-size:11px">stato ${escapeHtml(p.state||"")} (${escapeHtml(p.reason)})${p.tunnel?" · "+escapeHtml(p.tunnel):""}</div>`;
           (p.cpe||[]).forEach(c=>det+=`<div class="cpe">${escapeHtml(c)}</div>`);
-          (p.scripts||[]).forEach(s=>{ det+=`<div class="sid">▸ ${escapeHtml(s.id)}</div><pre>${escapeHtml(s.output||"")}</pre>`; });
+          if(nv){
+            det+=`<div class="pvulns">`+p.vulns.map(v=>`<a class="cvchip" href="${cveLink(v.id)}" target="_blank" rel="noopener" style="border-color:${cveColor(v.cvss)}"><b style="color:${cveColor(v.cvss)}">${v.cvss!=null?v.cvss.toFixed(1):"·"}</b>${escapeHtml(v.id)}${v.exploit?" ⚡":""}</a>`).join("")+`</div>`;
+          }
+          (p.scripts||[]).filter(s=>!/^vulners/.test(s.id||"")).forEach(s=>{ det+=`<div class="sid">▸ ${escapeHtml(s.id)}</div><pre>${escapeHtml(s.output||"")}</pre>`; });
           det+=`</div>`;
         }
         const chev=hasDet?(" "+(exp?"▲":"▼")):"";
+        const vb=nv?`<span class="vbadge" style="background:${cveColor((p.vulns[0]||{}).cvss)}">${nv} CVE</span>`:"";
         return `<div class="pitem"><div class="ph${hasDet?" click":""}" ${hasDet?`data-pexp="${p.port}"`:""}>
           <span class="p" style="color:${portColor(p.port,p.service)}">${p.port}/${escapeHtml(p.proto||"tcp")}</span>
           <span class="svc">${svc}</span>
-          <span class="ver">${ver}${chev}</span>
+          <span class="ver">${ver}${vb}${chev}</span>
         </div>${det}</div>`;
       }).join("")+`</div>`;
   } else {
@@ -1274,7 +1388,7 @@ function renderScan(j){
       res.hostscripts.map(s=>`<div class="hs-item"><div class="hid">▸ ${escapeHtml(s.id)}</div><pre>${escapeHtml(s.output||"")}</pre></div>`).join("");
   }
 
-  body.innerHTML = hero+stats+osHtml+grid+plist+hs;
+  body.innerHTML = hero+stats+osHtml+cvesec+grid+plist+hs;
 }
 
 async function loadMe(){
@@ -1286,8 +1400,9 @@ async function loadMe(){
       `<b>${escapeHtml(ME.name||"")}</b>${ME.role==="admin"?' <span class="rl">admin</span>':''}`;
     document.getElementById("usersBtn").style.display = ME.role==="admin" ? "" : "none";
     if(ME.version){
-      document.getElementById("ver").innerHTML =
-        `<b>${escapeHtml(ME.version)}</b> · ${escapeHtml(ME.build||"")}<br><span class="au">${escapeHtml(ME.author||"")}</span>`;
+      const vb=document.getElementById("ver");
+      vb.textContent = ME.version;
+      vb.title = "build "+(ME.build||"");
     }
   }catch(e){}
 }

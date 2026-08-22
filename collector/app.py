@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.5"
+VERSION = "v2.6"
 BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
@@ -54,6 +54,8 @@ NMAP_ENABLED = os.environ.get("MON_NMAP", "1") not in ("0", "false", "no", "")
 NMAP_INTERVAL_H = int(os.environ.get("MON_NMAP_INTERVAL_HOURS", "6"))   # rescan automatico ogni N ore
 NMAP_TOP_PORTS = int(os.environ.get("MON_NMAP_TOP_PORTS", "1000"))      # profondità standard
 NMAP_DEEP = os.environ.get("MON_NMAP_DEEP", "0") not in ("0", "false", "no", "")  # tutte le 65535 porte
+# NB: vulners interroga vulners.com via internet (CPE->CVE) -> NON è più on-premise
+NMAP_VULN = os.environ.get("MON_NMAP_VULN", "0") not in ("0", "false", "no", "")
 DB_PATH = os.path.join(DATA_DIR, "metrics.db")
 KNOWN_HOSTS = os.path.join(DATA_DIR, "known_hosts")
 HOSTS_FILE = os.path.join(DATA_DIR, "hosts.json")
@@ -171,6 +173,22 @@ def load_users():
     if not SECRET:
         SECRET = secrets.token_hex(32).encode()
     save_users()  # persiste segreto/migrazione
+
+
+def set_setting(k, v):
+    with db() as c:
+        c.execute("INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)", (k, v))
+
+
+def load_settings():
+    """Impostazioni runtime persistite in kv. Al primo avvio semina da env."""
+    global NMAP_VULN
+    with db() as c:
+        row = c.execute("SELECT v FROM kv WHERE k='nmap_vuln'").fetchone()
+    if row is None:
+        set_setting("nmap_vuln", "1" if NMAP_VULN else "0")  # semina dal default env
+    else:
+        NMAP_VULN = (row["v"] == "1")
 
 
 def hash_pw(pw, salt_hex):
@@ -472,16 +490,51 @@ def _target_ip(target):
 
 
 def run_nmap(ip):
-    """Scansione nmap OFFLINE (nessuna query esterna): versioni servizi (-sV),
-    script sicuri di default (-sC) e OS detection (-O). Ritorna un dict strutturato.
-    -sS/-O richiedono privilegi raw: il container gira root con NET_RAW/NET_ADMIN."""
+    """Scansione nmap: versioni servizi (-sV), OS detection (-O) e script NSE.
+    Con NMAP_VULN attivo aggiunge 'vulners' (CPE->CVE via vulners.com, richiede
+    internet: NON on-premise). -sS/-O richiedono privilegi raw: il container gira
+    root con NET_RAW/NET_ADMIN. I timeout scalano con la profondità (-p-)."""
     scope = ["-p-"] if NMAP_DEEP else ["--top-ports", str(NMAP_TOP_PORTS)]
-    cmd = (["nmap", "-sV", "-sC", "-O", "-T4", "--host-timeout", "300s",
-            "--max-retries", "2", "-oX", "-"] + scope + [ip])
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    scripts = "default,vulners" if NMAP_VULN else "default"
+    htimeout = "1500s" if NMAP_DEEP else "300s"
+    proc_timeout = 1800 if NMAP_DEEP else 600
+    cmd = (["nmap", "-sV", "-O", "-T4", "--script", scripts,
+            "--host-timeout", htimeout, "--max-retries", "2", "-oX", "-"] + scope + [ip])
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=proc_timeout)
     if not (p.stdout or "").strip():
         raise RuntimeError((p.stderr or "nmap rc=%d" % p.returncode).strip()[:300])
     return parse_nmap_xml(p.stdout)
+
+
+def _parse_vulners(script_el):
+    """Estrae le CVE dall'output strutturato dello script NSE 'vulners':
+    table[key=cpe] > table > elem[key in id/cvss/type/is_exploit]."""
+    out = []
+    for cpe_tbl in script_el.findall("table"):
+        for vt in cpe_tbl.findall("table"):
+            d = {e.get("key"): (e.text or "").strip() for e in vt.findall("elem")}
+            vid = d.get("id")
+            if not vid:
+                continue
+            cvss = None
+            try:
+                cvss = float(d["cvss"]) if d.get("cvss") else None
+            except ValueError:
+                cvss = None
+            out.append({"id": vid, "cvss": cvss, "type": d.get("type"),
+                        "exploit": d.get("is_exploit") == "true"})
+    return out
+
+
+def _dedup_vulns(vulns, cap=25):
+    """Deduplica per CVE tenendo il CVSS più alto, ordina per gravità, limita a `cap`."""
+    seen = {}
+    for v in vulns:
+        k = v["id"]
+        if k not in seen or (v.get("cvss") or 0) > (seen[k].get("cvss") or 0):
+            seen[k] = v
+    arr = sorted(seen.values(), key=lambda x: (-(x.get("cvss") or 0), x["id"]))
+    return arr[:cap]
 
 
 def parse_nmap_xml(xml_text):
@@ -514,8 +567,11 @@ def parse_nmap_xml(xml_text):
         for p in ports.findall("port"):
             state = p.find("state")
             svc = p.find("service")
-            scripts = [{"id": s.get("id"), "output": (s.get("output") or "").strip()}
-                       for s in p.findall("script")]
+            scripts, vulns = [], []
+            for s in p.findall("script"):
+                scripts.append({"id": s.get("id"), "output": (s.get("output") or "").strip()})
+                if (s.get("id") or "").startswith("vulners"):
+                    vulns.extend(_parse_vulners(s))
             out["ports"].append({
                 "port": int(p.get("portid")),
                 "proto": p.get("protocol"),
@@ -528,6 +584,7 @@ def parse_nmap_xml(xml_text):
                 "tunnel": svc.get("tunnel") if svc is not None else None,
                 "cpe": [c.text for c in (svc.findall("cpe") if svc is not None else [])],
                 "scripts": scripts,
+                "vulns": _dedup_vulns(vulns),
             })
     # tengo solo le porte non chiuse (open / open|filtered) per la UI
     out["ports"] = [pp for pp in out["ports"] if pp["state"] and pp["state"] != "closed"]
@@ -723,6 +780,10 @@ class Handler(BaseHTTPRequestHandler):
             else:     # tutti gli host -> {host: [righe]}
                 out = {n: fetch(n) for n, _ in list(HOSTS)}
                 self._send(200, json.dumps(out), "application/json")
+        elif u.path == "/api/settings":
+            self._json(200, {"nmap_enabled": NMAP_ENABLED, "nmap_vuln": NMAP_VULN,
+                             "nmap_deep": NMAP_DEEP, "nmap_top_ports": NMAP_TOP_PORTS,
+                             "nmap_interval_hours": NMAP_INTERVAL_H})
         elif u.path == "/api/scan":
             q = parse_qs(u.query)
             host = (q.get("host") or [""])[0]
@@ -735,7 +796,7 @@ class Handler(BaseHTTPRequestHandler):
             now = int(time.time())
             resp = {"host": host, "running": running, "enabled": NMAP_ENABLED,
                     "interval_hours": NMAP_INTERVAL_H, "deep": NMAP_DEEP,
-                    "top_ports": NMAP_TOP_PORTS}
+                    "top_ports": NMAP_TOP_PORTS, "vuln": NMAP_VULN}
             if cur:
                 resp.update({"ts": cur["ts"], "age": now - cur["ts"],
                              "duration": cur["duration"], "status": cur["status"],
@@ -898,6 +959,16 @@ class Handler(BaseHTTPRequestHandler):
                 save_hosts()
             return self._json(200, {"ok": True, "hosts": self._hosts_list()})
 
+        if u.path == "/api/settings":
+            global NMAP_VULN
+            if user["role"] != "admin":
+                return self._json(403, {"error": "richiede admin"})
+            b = self._read_json()
+            if "nmap_vuln" in b:
+                NMAP_VULN = bool(b.get("nmap_vuln"))
+                set_setting("nmap_vuln", "1" if NMAP_VULN else "0")
+            return self._json(200, {"ok": True, "nmap_vuln": NMAP_VULN})
+
         if u.path == "/api/scan":
             if user["role"] != "admin":
                 return self._json(403, {"error": "richiede admin"})
@@ -959,6 +1030,7 @@ def main():
     init_db()
     load_hosts()
     load_users()
+    load_settings()
     t = threading.Thread(target=poller_loop, daemon=True)
     t.start()
     if NMAP_ENABLED:
