@@ -1,0 +1,26 @@
+name: gpmon
+
+services:
+  gpmon:
+    build: .
+    image: gpmon:latest
+    container_name: gpmon
+    # host network: così il container raggiunge gli IP Tailscale 100.x come l'host
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # nome=utente@ip-tailscale — srv2 entra come user (sudo NOPASSWD -> sonda)
+      MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2,srv3=root@10.0.0.3"
+      # la web ascolta SOLO sull'IP Tailscale di srv2 -> mai esposta su eth0/pubblico
+      MON_BIND: "10.0.0.2:8888"
+      MON_INTERVAL: "15"
+      MON_RETENTION_HOURS: "48"
+      MON_SSH_KEY: "/app/ssh/monitor_ed25519"
+      MON_DATA_DIR: "/app/data"
+    volumes:
+      - ./ssh:/app/ssh:ro     # chiave privata di monitoraggio (sola lettura)
+      - ./data:/app/data      # SQLite + known_hosts (persistente)
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "3"}

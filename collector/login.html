@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GP monitor · accesso</title>
+<style>
+  :root{--bg:#0d1117;--card:#161b22;--line:#30363d;--fg:#e6edf3;--mut:#8b949e;
+        --ok:#3fb950;--bad:#f85149;--accent:#58a6ff;--docker:#2496ED;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);min-height:100vh;display:flex;
+       align-items:center;justify-content:center;
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px 26px;
+       width:min(380px,92vw);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .brand h1{font-size:18px;margin:0;font-weight:600}
+  .sub{color:var(--mut);font-size:12.5px;margin-bottom:20px}
+  .tabs{display:flex;gap:6px;margin-bottom:18px}
+  .tab{flex:1;text-align:center;padding:8px;border-radius:8px;border:1px solid var(--line);
+       background:#0d1117;color:var(--mut);cursor:pointer;font-size:13px;user-select:none}
+  .tab.on{color:var(--fg);border-color:var(--accent);background:#0d2137}
+  label{display:block;color:var(--mut);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
+  input{width:100%;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--fg);
+        padding:10px 12px;font-size:14px}
+  input:focus{outline:none;border-color:var(--accent)}
+  button.go{width:100%;margin-top:20px;background:#238636;border:1px solid #2ea043;color:#fff;
+            border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}
+  button.go:hover{background:#2ea043}
+  .msg{font-size:12.5px;margin-top:14px;min-height:16px;text-align:center}
+  .msg.err{color:var(--bad)} .msg.ok{color:var(--ok)}
+  .note{background:#0d2137;border:1px solid var(--accent);border-radius:8px;padding:9px 11px;
+        font-size:12px;color:var(--fg);margin-bottom:6px;display:none}
+  .note.on{display:block}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="brand">
+    <svg viewBox="0 0 58 40" width="30" height="21" fill="#2496ED" aria-label="docker">
+      <rect x="13" y="9" width="7" height="7" rx="1"/><rect x="21" y="9" width="7" height="7" rx="1"/>
+      <rect x="29" y="9" width="7" height="7" rx="1"/><rect x="21" y="1" width="7" height="7" rx="1"/>
+      <rect x="5" y="17" width="7" height="7" rx="1"/><rect x="13" y="17" width="7" height="7" rx="1"/>
+      <rect x="21" y="17" width="7" height="7" rx="1"/><rect x="29" y="17" width="7" height="7" rx="1"/>
+      <rect x="37" y="17" width="7" height="7" rx="1"/>
+      <path d="M2 26 h46 a11 11 0 0 1 -11 11 h-24 a11 11 0 0 1 -11 -11 z"/>
+      <path d="M49 23 q7 -1 8 -7 q-5 0 -8 7 z"/>
+    </svg>
+    <h1>GP&nbsp;monitor</h1>
+  </div>
+  <div class="sub">accesso riservato · solo via Tailscale</div>
+
+  <div class="note" id="setupNote">Nessun account presente: il <b>primo registrato diventa amministratore</b> ed è subito attivo.</div>
+
+  <div class="tabs">
+    <div class="tab on" id="tabLogin">Accedi</div>
+    <div class="tab" id="tabReg">Registrati</div>
+  </div>
+
+  <label>Utente</label>
+  <input id="user" autocomplete="username" autofocus>
+  <label>Password</label>
+  <input id="pass" type="password" autocomplete="current-password">
+
+  <button class="go" id="go">Accedi</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+let mode = "login";
+const $ = id => document.getElementById(id);
+
+function setMode(m){
+  mode = m;
+  $("tabLogin").classList.toggle("on", m==="login");
+  $("tabReg").classList.toggle("on", m==="reg");
+  $("go").textContent = m==="login" ? "Accedi" : "Registrati";
+  $("pass").autocomplete = m==="login" ? "current-password" : "new-password";
+  $("msg").textContent = "";
+}
+$("tabLogin").onclick = ()=>setMode("login");
+$("tabReg").onclick = ()=>setMode("reg");
+
+async function submit(){
+  const username = $("user").value.trim();
+  const password = $("pass").value;
+  const msg = $("msg");
+  msg.className = "msg"; msg.textContent = "…";
+  if(!username || !password){ msg.className="msg err"; msg.textContent="inserisci utente e password"; return; }
+  try{
+    const r = await fetch("/api/"+(mode==="login"?"login":"register"),
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({username,password})});
+    const j = await r.json();
+    if(!r.ok){ msg.className="msg err"; msg.textContent=j.error||"errore"; return; }
+    if(j.status==="pending"){
+      msg.className="msg ok";
+      msg.textContent="registrazione ricevuta: in attesa di approvazione dell'amministratore";
+      setMode("login"); return;
+    }
+    // login riuscito (o primo utente admin auto-loggato)
+    location.href = "/";
+  }catch(e){ msg.className="msg err"; msg.textContent="errore di rete"; }
+}
+$("go").onclick = submit;
+$("pass").addEventListener("keydown", e=>{ if(e.key==="Enter") submit(); });
+$("user").addEventListener("keydown", e=>{ if(e.key==="Enter") $("pass").focus(); });
+
+// se non esistono account, mostra il pannello "primo = admin" e apri la registrazione
+fetch("/api/authstate").then(r=>r.json()).then(s=>{
+  if(s.needs_setup){ $("setupNote").classList.add("on"); setMode("reg"); }
+}).catch(()=>{});
+</script>
+</body>
+</html>

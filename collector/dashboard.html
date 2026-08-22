@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GP monitor</title>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3; --mut:#8b949e;
+    --ok:#3fb950; --warn:#d29922; --bad:#f85149; --accent:#58a6ff; --docker:#2496ED;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;align-items:baseline;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line)}
+  header h1{font-size:18px;margin:0;font-weight:600}
+  header .meta{color:var(--mut);font-size:12px}
+  .content{padding:18px;display:flex;flex-direction:column;gap:16px}
+
+  /* ---- carosello card host (RAM + disco) ---- */
+  .carousel{position:relative}
+  .cards{display:flex;gap:16px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
+  .cards::-webkit-scrollbar{height:9px}
+  .cards::-webkit-scrollbar-thumb{background:#30363d;border-radius:5px}
+  .card{flex:0 0 300px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;scroll-snap-align:start}
+  .addcard{flex:0 0 132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+           border:1px dashed var(--line);border-radius:10px;color:var(--mut);cursor:pointer;background:#0d1117}
+  .addcard:hover{border-color:var(--accent);color:var(--fg)}
+  .addcard .plus{font-size:30px;line-height:1}
+  .carbtn{position:absolute;top:38%;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);
+          background:#161b22ee;color:var(--fg);cursor:pointer;font-size:18px;line-height:1;z-index:3;display:flex;
+          align-items:center;justify-content:center}
+  .carbtn:hover{border-color:var(--accent)}
+  .carbtn.left{left:-6px} .carbtn.right{right:-6px}
+  .card h2{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .host-sub{color:var(--mut);font-size:11px;margin-bottom:12px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.stale{background:var(--warn)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+  .metric{margin-bottom:6px}
+  .label{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .val{font-size:16px;font-weight:600}
+  .val small{font-size:11px;color:var(--mut);font-weight:400}
+  .bar{height:6px;border-radius:3px;background:#21262d;overflow:hidden;margin-top:4px}
+  .bar>i{display:block;height:100%;background:var(--ok)}
+  .bar.warn>i{background:var(--warn)} .bar.bad>i{background:var(--bad)}
+  section h3{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;
+             margin:14px 0 4px;border-top:1px solid var(--line);padding-top:10px}
+  .err{color:var(--bad);font-size:12.5px;padding:8px 0}
+
+  /* ---- strip (rete / sicurezza) a tutta larghezza ---- */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .panel-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+  .panel-head h3{font-size:14px;margin:0;font-weight:600}
+  .toggles{display:flex;gap:6px}
+  .tg{font-size:11.5px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
+      background:#0d1117;color:var(--mut);cursor:pointer;user-select:none}
+  .tg.on{color:var(--fg);border-color:var(--accent);background:#0d2137}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-left:auto;font-size:12px}
+  .legend .it{display:flex;align-items:center;gap:6px;color:var(--mut)}
+  .legend .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .legend b{color:var(--fg);font-variant-numeric:tabular-nums}
+  .chart{position:relative;width:100%}
+  .chart svg{display:block;width:100%}
+  .tip{position:absolute;pointer-events:none;background:#0d1117;border:1px solid var(--line);
+       border-radius:7px;padding:7px 9px;font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.5);
+       white-space:nowrap;display:none;z-index:5}
+  .tip .th{color:var(--mut);margin-bottom:3px}
+  .tip .tr{display:flex;align-items:center;gap:6px}
+  .tip .tr b{margin-left:auto;font-variant-numeric:tabular-nums}
+
+  /* ---- controllo finestra temporale ---- */
+  .winbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+          background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+  .winbar .label{white-space:nowrap}
+  .winbar input[type=range]{flex:1;min-width:180px;accent-color:var(--accent)}
+  .winbar .win-val{font-weight:600;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+  .presets{display:flex;gap:6px;flex-wrap:wrap}
+
+  /* ---- docker ---- */
+  .dockwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .dockcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .dockcard .dh{display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;user-select:none}
+  .dockcard .dh .chev{color:var(--mut);font-size:11px;transition:transform .12s}
+  .dockcard.collapsed .dh{margin-bottom:0}
+  .dockcard.collapsed .dh .chev{transform:rotate(-90deg)}
+  .dockcard .dh .nm{font-size:14px;font-weight:600}
+  .dockcard .dh .ct{margin-left:auto;font-size:12px;color:var(--mut)}
+  .cbody.hide{display:none}
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
+  .cchip{border:1px solid var(--line);border-radius:9px;padding:8px 6px 7px;text-align:center;
+         cursor:pointer;transition:border-color .12s,background .12s;background:#0d1117}
+  .cchip:hover{border-color:var(--accent)}
+  .cchip.sel{border-color:var(--accent);background:#0d2137}
+  .cchip .cn{font-size:11px;margin-top:5px;word-break:break-word;line-height:1.2;color:var(--fg)}
+  .cchip .cs{font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);margin-top:2px}
+  .cdetail{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:12.5px}
+  .cdetail.hide{display:none}
+  .cdetail .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #21262d}
+  .cdetail .row .k{color:var(--mut)}
+  .cdetail .row .v{font-variant-numeric:tabular-nums}
+  .cdetail .head{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .empty{color:var(--mut);font-size:12.5px;padding:6px 0}
+
+  /* ---- toggle on/off host nelle strip ---- */
+  .card h2 .enh{margin-left:auto;font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);
+        background:#0d1117;color:var(--mut);cursor:pointer;user-select:none;white-space:nowrap}
+  .card h2 .enh.on{color:var(--accent);border-color:var(--accent);background:#0d2137}
+  .card.off{opacity:.72}
+
+  /* ---- docker: tabella compatta per server ---- */
+  .ctab{width:100%;border-collapse:collapse;font-size:12.5px}
+  .ctab th{text-align:left;color:var(--mut);font-weight:500;font-size:10.5px;text-transform:uppercase;
+           letter-spacing:.03em;padding:2px 6px 7px;cursor:pointer;user-select:none;white-space:nowrap}
+  .ctab th:hover{color:var(--fg)}
+  .ctab th.num{text-align:left;width:34%}
+  .ctab th.st{width:22px}
+  .ctab th .ar{color:var(--accent);font-size:9px}
+  .crow{border-top:1px solid #21262d;cursor:pointer}
+  .crow:hover{background:#0d1117}
+  .crow.sel{background:#0d2137}
+  .crow td{padding:6px}
+  .sdot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .cnm{font-weight:500;color:var(--fg)}
+  .cnm .cst{display:block;color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.02em;margin-top:1px}
+  .cbar{display:flex;align-items:center;gap:7px}
+  .cbar .mini{flex:1;min-width:36px;height:6px;border-radius:3px;background:#21262d;overflow:hidden}
+  .cbar .mini>i{display:block;height:100%;background:var(--accent)}
+  .cbar .pv{font-variant-numeric:tabular-nums;color:var(--fg);min-width:38px;text-align:right;font-size:11.5px}
+  .cxrow td{padding:0 6px 9px}
+  .cxbox{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+         display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px 16px}
+  .cxbox .kv{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+  .cxbox .kv .k{color:var(--mut)} .cxbox .kv .v{font-variant-numeric:tabular-nums}
+
+  /* ---- header utente ---- */
+  .who{margin-left:auto;color:var(--mut);font-size:12px}
+  .who b{color:var(--fg)} .who .rl{color:var(--accent)}
+
+  /* ---- modale config ---- */
+  .gear{font-size:12.5px;padding:5px 12px;border-radius:20px;border:1px solid var(--line);
+        background:#0d1117;color:var(--fg);cursor:pointer;margin-left:10px}
+  .gear:hover{border-color:var(--accent)}
+  .usr{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+  .usr .un{font-weight:600;min-width:90px}
+  .usr .rl{font-size:11px;color:var(--accent);text-transform:uppercase}
+  .usr .badge{font-size:10.5px;padding:1px 8px;border-radius:20px;border:1px solid var(--line);color:var(--mut)}
+  .usr .badge.pending{color:var(--warn);border-color:var(--warn)}
+  .usr .acts{margin-left:auto;display:flex;gap:6px}
+  .usr .acts button{border:1px solid var(--line);border-radius:7px;padding:2px 9px;font-size:12px;
+        background:#0d1117;color:var(--fg);cursor:pointer}
+  .usr .acts .ap:hover{border-color:var(--ok);color:var(--ok)}
+  .usr .acts .rj:hover{border-color:var(--bad);color:var(--bad)}
+  .seccap{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;
+          margin:16px 0 4px;border-top:1px solid var(--line);padding-top:12px}
+  .ovl{position:fixed;inset:0;background:#00000099;display:none;align-items:flex-start;justify-content:center;z-index:50}
+  .ovl.on{display:flex}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:8vh;
+         width:min(560px,92vw);max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  .mhead{display:flex;align-items:center;margin-bottom:14px}
+  .mhead b{font-size:15px} .mhead .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:16px}
+  .mhead .x:hover{color:var(--fg)}
+  .hrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .hrow .hn{font-weight:600;min-width:70px}
+  .hrow .ht{color:var(--mut);font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+  .hrow .del{margin-left:auto;cursor:pointer;color:var(--bad);border:1px solid var(--line);border-radius:7px;
+             padding:2px 9px;font-size:12px;background:#0d1117}
+  .hrow .del:hover{border-color:var(--bad)}
+  .mform{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .mform input{flex:1;min-width:150px;background:#0d1117;border:1px solid var(--line);border-radius:7px;
+               color:var(--fg);padding:8px 10px;font-size:13px}
+  .mform input:focus{outline:none;border-color:var(--accent)}
+  .mform button{background:#238636;border:1px solid #2ea043;color:#fff;border-radius:7px;padding:8px 16px;
+                font-size:13px;cursor:pointer;font-weight:600}
+  .mform button:hover{background:#2ea043}
+  .msg{font-size:12.5px;margin-top:8px;min-height:16px}
+  .msg.err{color:var(--bad)} .msg.ok{color:var(--ok)}
+  .setup{margin-top:14px} .setup summary{cursor:pointer;color:var(--mut);font-size:12.5px}
+  .setup pre{background:#0d1117;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;
+             font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--fg)}
+  .setup .k{color:var(--mut);font-size:11.5px;margin:8px 0 3px}
+
+  /* ---- versione / autore in testata ---- */
+  header .ver{color:var(--mut);font-size:11px;line-height:1.25}
+  header .ver b{color:var(--fg);font-weight:600}
+  header .ver .au{color:var(--accent)}
+
+  /* ---- gestione utenti: azioni extra ---- */
+  .usr .badge.admin{color:var(--accent);border-color:var(--accent)}
+  .usr .acts .pr:hover{border-color:var(--accent);color:var(--accent)}
+  .usr .acts .dl:hover{border-color:var(--bad);color:var(--bad)}
+  .usr .me{font-size:10px;color:var(--mut)}
+
+  /* ---- Sankey flussi di rete ---- */
+  .flowbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .flowtabs{display:flex;gap:6px;flex-wrap:wrap}
+  .snk{width:100%;overflow-x:auto}
+  .snk svg{display:block}
+  .snk .nlab{fill:var(--fg);font-size:11px}
+  .snk .nsub{fill:var(--mut);font-size:9.5px}
+  .snk .plab{fill:var(--fg);font-size:10.5px;font-weight:600}
+  .snk .col-cap{fill:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .snk-empty{color:var(--mut);font-size:12.5px;padding:14px 2px}
+
+  /* ---- docker: overview stile Grafana (stat + gauge) ---- */
+  .dover{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:10px;
+         margin-bottom:12px;align-items:stretch}
+  .stat{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:8px 6px;text-align:center}
+  .stat .sv{font-size:24px;font-weight:700;line-height:1.1}
+  .stat .sl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
+  .gauge{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:6px 4px 4px;text-align:center}
+  .gauge .gl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:-2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>GP&nbsp;monitor</h1>
+  <span class="ver" id="ver"></span>
+  <span class="meta" id="meta">avvio…</span>
+  <span class="who" id="who"></span>
+  <button class="gear" id="gear">⚙ Config</button>
+  <button class="gear" id="logout">Esci</button>
+</header>
+
+<div class="content">
+  <!-- carosello card host: RAM + disco -->
+  <div class="carousel">
+    <button class="carbtn left" id="carL" title="scorri">‹</button>
+    <div class="cards" id="cards"></div>
+    <button class="carbtn right" id="carR" title="scorri">›</button>
+  </div>
+
+  <!-- controllo finestra temporale condiviso -->
+  <div class="winbar">
+    <span class="label">Finestra</span>
+    <input type="range" id="win" min="0" max="100" value="55">
+    <span class="win-val" id="winval">1h</span>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <!-- strip rete -->
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Rete — throughput per server</h3>
+      <div class="toggles" id="netTg"></div>
+      <div class="legend" id="netLeg"></div>
+    </div>
+    <div class="chart" id="netChart"><div class="tip" id="netTip"></div></div>
+  </div>
+
+  <!-- flussi di rete (chi comunica con chi, su quali porte) -->
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Flussi di rete — chi comunica con chi</h3>
+      <div class="flowbar">
+        <div class="flowtabs" id="flowHosts"></div>
+        <div class="toggles" id="flowDir"></div>
+      </div>
+    </div>
+    <div class="snk" id="flowSnk"></div>
+  </div>
+
+  <!-- strip sicurezza -->
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Sicurezza — attività per server</h3>
+      <div class="toggles" id="secTg"></div>
+      <div class="legend" id="secLeg"></div>
+    </div>
+    <div class="chart" id="secChart"><div class="tip" id="secTip"></div></div>
+  </div>
+
+  <!-- docker per server -->
+  <div>
+    <div class="panel-head" style="padding:0 2px 6px">
+      <h3 id="dockTitle">Docker — container per server</h3>
+    </div>
+    <div class="dockwrap" id="dockwrap"></div>
+  </div>
+</div>
+
+<!-- modale configurazione server -->
+<div class="ovl" id="ovl">
+  <div class="modal">
+    <div class="mhead"><b>Configurazione server</b><span class="x" id="cfgX">✕</span></div>
+    <div id="cfgList"></div>
+    <div class="mform">
+      <input id="cfgName" placeholder="Nome (es. GP04)" maxlength="32">
+      <input id="cfgTarget" placeholder="utente@host (es. root@100.0.0.5)">
+      <input id="cfgPass" type="password" placeholder="password bootstrap (solo per installazione automatica)">
+      <button id="cfgEnroll" title="installa la sonda via SSH usando la password (usata una volta, mai salvata)">Installa sonda + aggiungi</button>
+      <button id="cfgAdd" style="background:#30363d;border-color:#484f58" title="aggiungi soltanto: dovrai installare la sonda manualmente">Aggiungi (manuale)</button>
+    </div>
+    <div class="msg" id="cfgMsg"></div>
+    <div id="cfgUsersWrap" style="display:none">
+      <div class="seccap">Gestione utenti</div>
+      <div id="cfgUsers"></div>
+    </div>
+    <details class="setup">
+      <summary>Installazione manuale della sonda (chiave + comando forzato)</summary>
+      <div id="cfgSetup"></div>
+    </details>
+  </div>
+</div>
+
+<script>
+// ------------------------------------------------------------ util
+const HB = ["B","KB","MB","GB","TB","PB"];
+function hbytes(n){ if(n==null) return "—"; let i=0,x=n; while(x>=1024&&i<HB.length-1){x/=1024;i++;} return x.toFixed(x<10&&i>0?1:0)+" "+HB[i]; }
+function hrate(n){ if(n==null) return "—"; return hbytes(n)+"/s"; }
+function hnum(n){ if(n==null) return "—"; if(n>=1e6) return (n/1e6).toFixed(1)+"M"; if(n>=1e3) return (n/1e3).toFixed(1)+"k"; return String(n); }
+function pct(n){ return n==null?"—":n.toFixed(0)+"%"; }
+function ago(ts){ const s=Math.floor(Date.now()/1000)-ts; if(s<60)return s+"s fa"; if(s<3600)return Math.floor(s/60)+"m fa"; return Math.floor(s/3600)+"h fa"; }
+function barClass(p){ return p>=90?"bar bad":p>=75?"bar warn":"bar"; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function hm(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes()); }
+function hms(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
+
+// colori per host (assegnati per indice)
+const PALETTE = ["#58a6ff","#3fb950","#f0883e","#bc8cff","#f778ba","#39d0d8"];
+let HOST_COLOR = {};
+function colorFor(h,i){ if(!(h in HOST_COLOR)) HOST_COLOR[h]=PALETTE[i%PALETTE.length]; return HOST_COLOR[h]; }
+
+// ------------------------------------------------------------ stato UI
+let netMetric = "rx";     // rx | tx
+let secMetric = "fw";     // fw | ssh
+let winMin = 60;          // finestra in minuti
+const REFRESH = 5000;
+let ME = null;            // utente corrente {name, role}
+
+// host esclusi dalle strip rete/sicurezza (persistito). Default: tutti inclusi.
+let DISABLED = new Set();
+try{ DISABLED = new Set(JSON.parse(localStorage.getItem("gpmon_disabled")||"[]")); }catch(e){}
+function isEnabled(h){ return !DISABLED.has(h); }
+function saveDisabled(){ localStorage.setItem("gpmon_disabled", JSON.stringify([...DISABLED])); }
+function toggleHost(h){ DISABLED.has(h)?DISABLED.delete(h):DISABLED.add(h); saveDisabled(); }
+
+// ordinamento tabella docker (per server, condiviso)
+let dockSort = {key:"sev", dir:1};   // sev|name|cpu|mem ; dir 1=asc -1=desc
+
+// flussi di rete (Sankey): server selezionato + direzioni attive (multi-selezione)
+let flowHost = null;        // nome host selezionato (default: primo)
+let flowDirs = ["in"];      // sottoinsieme di ["in","out"]; entrambi = server al centro
+
+// nomi noti delle porte (per etichettare i flussi)
+const PORT_NAMES = {22:"SSH",25:"SMTP",53:"DNS",80:"HTTP",110:"POP3",143:"IMAP",443:"HTTPS",
+  465:"SMTPS",587:"submission",993:"IMAPS",995:"POP3S",3306:"MySQL",5432:"PostgreSQL",
+  6379:"Redis",8080:"HTTP-alt",8443:"HTTPS-alt",8888:"gp-monitor",27017:"MongoDB",51820:"WireGuard"};
+function portLabel(p){ return PORT_NAMES[p] ? PORT_NAMES[p]+" · "+p : "porta "+p; }
+
+// slider (log) -> minuti: 5min .. 2880min (48h)
+function sliderToMin(v){ const min=5,max=2880; return Math.round(min*Math.pow(max/min, v/100)); }
+function minToSlider(m){ const min=5,max=2880; return Math.round(100*Math.log(m/min)/Math.log(max/min)); }
+function winLabel(m){ if(m<60) return m+"m"; if(m%60===0) return (m/60)+"h"; return (m/60).toFixed(1)+"h"; }
+
+// ------------------------------------------------------------ grafico multi-linea nel tempo
+// series: [{name,color,pts:[[t,v],...]}]  ; valfmt(v)->string
+function drawChart(box, tip, series, valfmt){
+  const w = Math.max(320, box.clientWidth), h = 168;
+  const pad = {l:52, r:12, t:12, b:22};
+  const now = Math.floor(Date.now()/1000);
+  const t1 = now, t0 = now - winMin*60;
+  let vmax = 0;
+  series.forEach(s=>s.pts.forEach(p=>{ if(p[1]!=null && p[1]>vmax) vmax=p[1]; }));
+  vmax = vmax>0 ? vmax*1.12 : 1;
+  const X = t => pad.l + (t-t0)/Math.max(1,(t1-t0))*(w-pad.l-pad.r);
+  const Y = v => h-pad.b - (v/vmax)*(h-pad.t-pad.b);
+
+  // gridline + label valore (4)
+  let grid="", yl="";
+  for(let i=0;i<=4;i++){ const v=vmax*i/4, y=Y(v);
+    grid += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${w-pad.r}" y2="${y.toFixed(1)}" stroke="#21262d" stroke-width="1"/>`;
+    yl += `<text x="${pad.l-6}" y="${(y+3).toFixed(1)}" fill="#8b949e" font-size="10" text-anchor="end">${valfmt(v)}</text>`;
+  }
+  // tick tempo (5)
+  let xl="";
+  const small = winMin<=60;
+  for(let i=0;i<=4;i++){ const t=t0+(t1-t0)*i/4, x=X(t);
+    xl += `<text x="${x.toFixed(1)}" y="${h-6}" fill="#8b949e" font-size="10" text-anchor="middle">${small?hms(t):hm(t)}</text>`;
+  }
+  // linee
+  let paths="";
+  series.forEach(s=>{
+    const inWin = s.pts.filter(p=>p[0]>=t0-2 && p[1]!=null);
+    if(inWin.length<2) return;
+    const pts = inWin.map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join(" ");
+    paths += `<polyline fill="none" stroke="${s.color}" stroke-width="1.7" points="${pts}"/>`;
+  });
+  const cross = `<line id="cx" x1="0" y1="${pad.t}" x2="0" y2="${h-pad.b}" stroke="#8b949e" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>`;
+  box.querySelector('svg')?.remove();
+  // inserisco come stringa HTML (parsing SVG corretto, evita problemi di namespace)
+  box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${w} ${h}" height="${h}">${grid+yl+xl+paths+cross}</svg>`);
+  const svg = box.querySelector('svg');
+
+  // hover: crosshair + tooltip con i valori più vicini per ogni serie
+  const cx = svg.querySelector('#cx');
+  function move(ev){
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (w/r.width);
+    if(px<pad.l||px>w-pad.r){ cx.style.display="none"; tip.style.display="none"; return; }
+    const t = t0 + (px-pad.l)/(w-pad.l-pad.r)*(t1-t0);
+    cx.setAttribute("x1",px); cx.setAttribute("x2",px); cx.style.display="";
+    let rows="";
+    series.forEach(s=>{
+      if(!s.pts.length) return;
+      let best=null,bd=1e18;
+      for(const p of s.pts){ if(p[1]==null) continue; const d=Math.abs(p[0]-t); if(d<bd){bd=d;best=p;} }
+      if(best) rows += `<div class="tr"><span class="sw" style="width:9px;height:9px;border-radius:2px;background:${s.color}"></span>${s.name}<b>${valfmt(best[1])}</b></div>`;
+    });
+    tip.innerHTML = `<div class="th">${hms(t)}</div>${rows}`;
+    tip.style.display="block";
+    let tx = (px*r.width/w) + 12; if(tx > r.width-140) tx = (px*r.width/w) - tip.offsetWidth - 12;
+    tip.style.left = Math.max(0,tx)+"px"; tip.style.top = "6px";
+  }
+  svg.onmousemove = move;
+  svg.onmouseleave = ()=>{ cx.style.display="none"; tip.style.display="none"; };
+}
+
+// ------------------------------------------------------------ Sankey flussi di rete
+const PORT_PAL = ["#58a6ff","#3fb950","#f0883e","#bc8cff","#f778ba","#39d0d8","#d29922","#ff7b72"];
+
+// aggrega una direzione: top 12 IP · 10 porte, solo i flussi tra quelli mostrati
+function sankeyDir(list){
+  const ipTot={}, portTot={};
+  (list||[]).forEach(f=>{ ipTot[f.ip]=(ipTot[f.ip]||0)+f.n; portTot[+f.port]=(portTot[+f.port]||0)+f.n; });
+  const ipKeep=new Set(Object.entries(ipTot).sort((a,b)=>b[1]-a[1]).slice(0,12).map(e=>e[0]));
+  const portKeep=new Set(Object.entries(portTot).sort((a,b)=>b[1]-a[1]).slice(0,10).map(e=>+e[0]));
+  const shown=(list||[]).filter(f=>ipKeep.has(f.ip)&&portKeep.has(+f.port));
+  const ipVal={}, portVal={}; let total=0;
+  shown.forEach(f=>{ ipVal[f.ip]=(ipVal[f.ip]||0)+f.n; portVal[+f.port]=(portVal[+f.port]||0)+f.n; total+=f.n; });
+  return {shown, ipVal, portVal, total,
+          ips:Object.keys(ipVal).sort((a,b)=>ipVal[b]-ipVal[a]),
+          ports:Object.keys(portVal).map(Number).sort((a,b)=>portVal[b]-portVal[a]),
+          moreIp:Object.keys(ipTot).length-Object.keys(ipVal).length,
+          morePort:Object.keys(portTot).length-Object.keys(portVal).length};
+}
+
+// flows: {in:[...],out:[...]} ; dirs: sottoinsieme di ["in","out"]
+// una direzione: IP → porte → server ; entrambe: IP → porte → SERVER → porte → IP
+function drawSankey(box, flows, hostName, dirs){
+  const empty = m => { box.innerHTML = `<div class="snk-empty">${m}</div>`; };
+  const din = dirs.includes("in")  ? sankeyDir((flows||{}).in)  : null;
+  const dout= dirs.includes("out") ? sankeyDir((flows||{}).out) : null;
+  const hasIn = !!(din && din.shown.length), hasOut = !!(dout && dout.shown.length);
+  if(!hasIn && !hasOut) return empty("nessuna connessione da mostrare per le direzioni selezionate");
+
+  const nodeW=13, G=12, padT=28, padB=16, W=Math.max(680, box.clientWidth);
+  const counts=[1];
+  if(hasIn)  counts.push(din.ips.length, din.ports.length);
+  if(hasOut) counts.push(dout.ips.length, dout.ports.length);
+  const kmax=Math.max(...counts, 1);
+  const srvVal=Math.max(hasIn?din.total:0, hasOut?dout.total:0, 1);
+  const availH=Math.max(160, kmax*30);
+  const scale=(availH-(kmax-1)*G)/srvVal;
+  const H=availH+padT+padB;
+
+  // posizioni colonne (bordo sinistro del nodo)
+  let X;
+  if(hasIn && hasOut) X={ipin:120, portin:Math.round(W*0.31), srv:Math.round((W-nodeW)/2), portout:Math.round(W*0.63), ipout:W-120-nodeW};
+  else if(hasIn)      X={ipin:150, portin:Math.round((W-nodeW)/2), srv:W-150-nodeW};
+  else                X={srv:150, portout:Math.round((W-nodeW)/2), ipout:W-150-nodeW};
+
+  function layout(items,x){
+    const k=items.length, colH=items.reduce((s,it)=>s+it.val*scale,0)+(k-1)*G;
+    let y=padT+(availH-colH)/2;
+    items.forEach(it=>{ it.x=x; it.y0=y; it.h=Math.max(1.5,it.val*scale); it.inOff=y; it.outOff=y; y+=it.h+G; });
+    return items;
+  }
+  // colore per porta condiviso fra le due direzioni
+  const allPorts=[...new Set([...(hasIn?din.ports:[]), ...(hasOut?dout.ports:[])])];
+  const portColor={}; allPorts.forEach((p,i)=>portColor[p]=PORT_PAL[i%PORT_PAL.length]);
+
+  let ipinN=[],portinN=[],ipoutN=[],portoutN=[];
+  if(hasIn){
+    ipinN=layout(din.ips.map(ip=>({key:ip,val:din.ipVal[ip],label:ip,sub:din.ipVal[ip]+" conn"})), X.ipin);
+    portinN=layout(din.ports.map(p=>({key:p,val:din.portVal[p],label:portLabel(p),col:portColor[p]})), X.portin);
+  }
+  if(hasOut){
+    portoutN=layout(dout.ports.map(p=>({key:p,val:dout.portVal[p],label:portLabel(p),col:portColor[p]})), X.portout);
+    ipoutN=layout(dout.ips.map(ip=>({key:ip,val:dout.ipVal[ip],label:ip,sub:dout.ipVal[ip]+" conn"})), X.ipout);
+  }
+  const srvSub=(hasIn?din.total+" in":"")+(hasIn&&hasOut?" · ":"")+(hasOut?dout.total+" out":"");
+  const srvN=layout([{key:"srv",val:srvVal,label:hostName,sub:srvSub}], X.srv)[0];
+  const portinMap={}; portinN.forEach(n=>portinMap[n.key]=n);
+  const ipinMap={}; ipinN.forEach((n,i)=>{n.idx=i; ipinMap[n.key]=n;});
+  const portinIdx={}; portinN.forEach((n,i)=>portinIdx[n.key]=i);
+  const portoutMap={}; portoutN.forEach(n=>portoutMap[n.key]=n);
+  const ipoutMap={}; ipoutN.forEach((n,i)=>{n.idx=i; ipoutMap[n.key]=n;});
+  const portoutIdx={}; portoutN.forEach((n,i)=>portoutIdx[n.key]=i);
+
+  let ribbons="";
+  function ribbon(a,b,v,color){
+    const L=a.x<b.x?a:b, R=a.x<b.x?b:a;
+    const sx=L.x+nodeW, dx=R.x, mx=(sx+dx)/2;
+    const sy0=L.outOff, sy1=L.outOff+v*scale; L.outOff=sy1;
+    const dy0=R.inOff,  dy1=R.inOff +v*scale; R.inOff=dy1;
+    ribbons+=`<path d="M${sx.toFixed(1)},${sy0.toFixed(1)} C${mx.toFixed(1)},${sy0.toFixed(1)} ${mx.toFixed(1)},${dy0.toFixed(1)} ${dx.toFixed(1)},${dy0.toFixed(1)} L${dx.toFixed(1)},${dy1.toFixed(1)} C${mx.toFixed(1)},${dy1.toFixed(1)} ${mx.toFixed(1)},${sy1.toFixed(1)} ${sx.toFixed(1)},${sy1.toFixed(1)} Z" fill="${color}" fill-opacity=".30"><title>${escapeHtml(a.label)} → ${escapeHtml(b.label)} · ${v} conn</title></path>`;
+  }
+  if(hasIn){
+    din.shown.slice().sort((x,y)=>(ipinMap[x.ip].idx-ipinMap[y.ip].idx)||(portinIdx[+x.port]-portinIdx[+y.port]))
+      .forEach(f=>ribbon(ipinMap[f.ip], portinMap[+f.port], f.n, portinMap[+f.port].col));
+    portinN.forEach(p=>ribbon(p, srvN, p.val, p.col));           // porte-in → server (lato sx)
+  }
+  if(hasOut){
+    portoutN.forEach(p=>ribbon(srvN, p, p.val, p.col));          // server (lato dx) → porte-out
+    dout.shown.slice().sort((x,y)=>(portoutIdx[+x.port]-portoutIdx[+y.port])||(ipoutMap[x.ip].idx-ipoutMap[y.ip].idx))
+      .forEach(f=>ribbon(portoutMap[+f.port], ipoutMap[f.ip], f.n, portoutMap[+f.port].col));
+  }
+
+  function rect(n,col){ return `<rect x="${n.x}" y="${n.y0.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}" rx="2" fill="${col}"/>`; }
+  const txt=(x,y,anc,cls,s,extra="")=>`<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${anc}" class="${cls}" ${extra}>${escapeHtml(s)}</text>`;
+  let svg="";
+  const cap=(x,t)=>`<text x="${x}" y="16" text-anchor="middle" class="col-cap">${t}</text>`;
+  if(hasIn)  svg+=cap(X.ipin+nodeW/2,"IP remoti (in)")+cap(X.portin+nodeW/2,"porte in");
+  if(hasOut) svg+=cap(X.portout+nodeW/2,"porte out")+cap(X.ipout+nodeW/2,"IP remoti (out)");
+  svg+=cap(X.srv+nodeW/2,"server");
+  svg+=ribbons;
+  ipinN.forEach(n=>{ const cy=n.y0+n.h/2; svg+=rect(n,"#6e7681")+txt(n.x-6,cy-1,"end","nlab",n.label)+txt(n.x-6,cy+10,"end","nsub",n.sub); });
+  portinN.forEach(n=>{ svg+=rect(n,n.col)+txt(n.x+nodeW/2,n.y0-3,"middle","plab",n.label); });
+  portoutN.forEach(n=>{ svg+=rect(n,n.col)+txt(n.x+nodeW/2,n.y0-3,"middle","plab",n.label); });
+  ipoutN.forEach(n=>{ const cy=n.y0+n.h/2; svg+=rect(n,"#6e7681")+txt(n.x+nodeW+6,cy-1,"start","nlab",n.label)+txt(n.x+nodeW+6,cy+10,"start","nsub",n.sub); });
+  // server
+  svg+=rect(srvN,"var(--accent)");
+  if(hasIn && hasOut){
+    svg+=txt(X.srv+nodeW/2, srvN.y0-6, "middle", "nlab", hostName, 'style="font-weight:600"')
+       +txt(X.srv+nodeW/2, srvN.y0+srvN.h+12, "middle", "nsub", srvSub);
+  } else {
+    const hx = hasIn ? srvN.x+nodeW+6 : srvN.x-6, anc = hasIn ? "start" : "end", hcy=srvN.y0+srvN.h/2;
+    svg+=txt(hx,hcy-1,anc,"nlab",hostName,'style="font-weight:600"')+txt(hx,hcy+10,anc,"nsub",srvSub);
+  }
+  const moreIp=(hasIn?din.moreIp:0)+(hasOut?dout.moreIp:0), morePort=(hasIn?din.morePort:0)+(hasOut?dout.morePort:0);
+  const note=(moreIp>0||morePort>0)?`<text x="${(W/2).toFixed(1)}" y="${H-2}" text-anchor="middle" class="nsub">mostrati i più attivi${moreIp>0?" · +"+moreIp+" IP":""}${morePort>0?" · +"+morePort+" porte":""}</text>`:"";
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H+(note?12:0)}" width="${W}" height="${H+(note?12:0)}">${svg}${note}</svg>`;
+}
+
+function renderFlow(){
+  const hosts=HOSTS.filter(h=>{ const d=LATEST[h]; return d && !d.error && d.flows; });
+  const tabsEl=document.getElementById("flowHosts"), dirEl=document.getElementById("flowDir");
+  if(!hosts.length){ tabsEl.innerHTML=""; dirEl.innerHTML="";
+    document.getElementById("flowSnk").innerHTML=`<div class="snk-empty">nessun dato di flusso (richiede la sonda v2: reinstallala dal pannello Config)</div>`;
+    return; }
+  if(!flowHost || !hosts.includes(flowHost)) flowHost=hosts[0];
+  tabsEl.innerHTML=hosts.map(h=>`<span class="tg ${flowHost===h?'on':''}" data-flowhost="${escapeHtml(h)}">${escapeHtml(h)}</span>`).join("");
+  dirEl.innerHTML=[["in","← in ingresso"],["out","in uscita →"]]
+    .map(([k,l])=>`<span class="tg ${flowDirs.includes(k)?'on':''}" data-flowdir="${k}">${l}</span>`).join("");
+  drawSankey(document.getElementById("flowSnk"), (LATEST[flowHost]||{}).flows||{}, flowHost, flowDirs);
+}
+
+// gauge semicircolare (stile Grafana) per l'overview Docker
+function gaugeSvg(value, label){
+  const v=value==null?null:Math.max(0,Math.min(100,value));
+  const col=v==null?"#30363d": v>=85?"var(--bad)": v>=60?"var(--warn)":"var(--ok)";
+  const r=34, cx=44, cy=44, C=Math.PI*r;
+  const arc=`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`;
+  const dash=`${(C*(v==null?0:v/100)).toFixed(1)} ${C.toFixed(1)}`;
+  return `<div class="gauge"><svg viewBox="0 0 88 52" width="100%" height="50">
+    <path d="${arc}" fill="none" stroke="#21262d" stroke-width="8" stroke-linecap="round"/>
+    <path d="${arc}" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${dash}"/>
+    <text x="44" y="40" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="700">${v==null?"—":v.toFixed(0)+"%"}</text>
+    </svg><div class="gl">${label}</div></div>`;
+}
+
+// ------------------------------------------------------------ card host (RAM + disco)
+function enhPill(name){
+  const on = isEnabled(name);
+  return `<span class="enh ${on?'on':''}" data-enh="${escapeHtml(name)}"
+    title="includi ${escapeHtml(name)} nelle strip Rete/Sicurezza">${on?'● in grafico':'○ escluso'}</span>`;
+}
+function hostCard(name, d){
+  if(!d || d.error){
+    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${enhPill(name)}</h2>
+      <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
+  }
+  const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
+  const ram=d.ram, rp = ram.total? ram.used/ram.total*100 : 0;
+  const disks=(d.disk||[]);
+  const diskRows = disks.map(dk=>`
+    <div class="metric"><div class="label">${dk.target} <small>${dk.fstype||""}</small></div>
+      <div class="val">${pct(dk.use_pct)}
+        <small>usato ${hbytes(dk.used)} · libero ${hbytes(dk.avail)} · tot ${hbytes(dk.size)}</small></div>
+      <div class="${barClass(dk.use_pct)}"><i style="width:${dk.use_pct}%"></i></div></div>`).join("")
+    || '<div class="empty">—</div>';
+  return `<div class="card${isEnabled(name)?'':' off'}">
+    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${enhPill(name)}</h2>
+    <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
+    <div class="grid2">
+      <div class="metric"><div class="label">RAM</div>
+        <div class="val">${pct(rp)} <small>${hbytes(ram.used)} / ${hbytes(ram.total)}</small></div>
+        <div class="${barClass(rp)}"><i style="width:${rp}%"></i></div></div>
+      <div class="metric"><div class="label">Swap · Conn. ESTAB</div>
+        <div class="val">${hbytes(ram.swap_used)} <small>/ ${hbytes(ram.swap_total)}</small></div>
+        <div class="val" style="margin-top:6px">${(d.conns||{}).estab ?? "—"} <small>conn.</small></div></div>
+    </div>
+    <section><h3>Disco</h3>${diskRows}</section>
+  </div>`;
+}
+
+// ------------------------------------------------------------ docker: whale + container
+const WHALE = `<svg viewBox="0 0 58 40" width="30" height="21" fill="#2496ED" aria-label="docker">
+  <rect x="13" y="9"  width="7" height="7" rx="1"/><rect x="21" y="9"  width="7" height="7" rx="1"/>
+  <rect x="29" y="9"  width="7" height="7" rx="1"/><rect x="21" y="1"  width="7" height="7" rx="1"/>
+  <rect x="5"  y="17" width="7" height="7" rx="1"/><rect x="13" y="17" width="7" height="7" rx="1"/>
+  <rect x="21" y="17" width="7" height="7" rx="1"/><rect x="29" y="17" width="7" height="7" rx="1"/>
+  <rect x="37" y="17" width="7" height="7" rx="1"/>
+  <path d="M2 26 h46 a11 11 0 0 1 -11 11 h-24 a11 11 0 0 1 -11 -11 z"/>
+  <path d="M49 23 q7 -1 8 -7 q-5 0 -8 7 z"/>
+</svg>`;
+
+function contState(c){
+  const st=(c.state||"").toLowerCase(), he=(c.health||"").toLowerCase();
+  if(he==="unhealthy"||he==="starting"||he==="health: starting"||["restarting","paused","created"].includes(st)) return "warn";
+  if(st==="running") return "ok";
+  return "bad"; // exited/dead/stopped
+}
+const STATE_COL = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)"};
+function contGlyph(col){
+  return `<svg viewBox="0 0 46 46" width="42" height="42">
+    <rect x="6" y="13" width="34" height="27" rx="2" fill="${col}"/>
+    <rect x="6" y="13" width="34" height="6" rx="2" fill="${col}" opacity=".65"/>
+    <g stroke="rgba(0,0,0,.28)" stroke-width="2">
+      <line x1="15" y1="20" x2="15" y2="40"/><line x1="23" y1="20" x2="23" y2="40"/><line x1="31" y1="20" x2="31" y2="40"/>
+    </g></svg>`;
+}
+let dockerSel = {};        // host -> nome container selezionato (riga espansa)
+let dockColl = new Set();  // host con card docker collassata
+
+const SEV = {bad:0, warn:1, ok:2};   // ordine: problemi/stopped in cima
+function pbarcol(p){ return p==null?"var(--accent)": p>=85?"var(--bad)": p>=60?"var(--warn)":"var(--accent)"; }
+function sortConts(list){
+  const k=dockSort.key, dir=dockSort.dir;
+  const keyf = c => k==="cpu" ? (c.cpu_pct==null?-1:c.cpu_pct)
+                  : k==="mem" ? (c.mem_pct==null?-1:c.mem_pct)
+                  : k==="name" ? c.name.toLowerCase()
+                  : SEV[contState(c)];
+  return [...list].sort((a,b)=>{
+    const va=keyf(a), vb=keyf(b);
+    let r = va<vb?-1 : va>vb?1 : 0;
+    if(r===0){ const na=a.name.toLowerCase(), nb=b.name.toLowerCase(); r = na<nb?-1:na>nb?1:0; }
+    return r*dir;
+  });
+}
+
+function dockerCard(name, d){
+  const conts = d && !d.error ? d.docker : null;
+  const coll = dockColl.has(name);
+  let body;
+  if(conts==null){ body = `<div class="empty">docker non disponibile</div>`; }
+  else if(!conts.length){ body = `<div class="empty">nessun container</div>`; }
+  else {
+    const arr = k => dockSort.key===k ? `<span class="ar"> ${dockSort.dir>0?'▲':'▼'}</span>` : "";
+    let rows="";
+    for(const c of sortConts(conts)){
+      const col = STATE_COL[contState(c)];
+      const sel = dockerSel[name]===c.name;
+      const cpu=c.cpu_pct, mem=c.mem_pct;
+      const cpuW = cpu==null?0:Math.min(100,cpu), memW = mem==null?0:Math.min(100,mem);
+      rows += `<tr class="crow${sel?' sel':''}" data-host="${escapeHtml(name)}" data-cont="${escapeHtml(c.name)}">
+        <td><span class="sdot" style="background:${col}" title="${escapeHtml(c.state)}"></span></td>
+        <td><span class="cnm">${escapeHtml(c.name)}<span class="cst" style="color:${col}">${escapeHtml(c.state)}${c.health?" · "+escapeHtml(c.health):""}</span></span></td>
+        <td><div class="cbar"><span class="mini"><i style="width:${cpuW}%;background:${pbarcol(cpu)}"></i></span><span class="pv">${cpu==null?"—":cpu.toFixed(0)+"%"}</span></div></td>
+        <td><div class="cbar"><span class="mini"><i style="width:${memW}%;background:${pbarcol(mem)}"></i></span><span class="pv">${mem==null?"—":mem.toFixed(0)+"%"}</span></div></td></tr>`;
+      if(sel){
+        rows += `<tr class="cxrow"><td colspan="4"><div class="cxbox">
+          <div class="kv"><span class="k">Memoria</span><span class="v">${escapeHtml(c.mem_usage||"—")}</span></div>
+          <div class="kv"><span class="k">Rete I/O</span><span class="v">${escapeHtml(c.net_io||"—")}</span></div>
+          <div class="kv"><span class="k">Blocco I/O</span><span class="v">${escapeHtml(c.blk_io||"—")}</span></div>
+          <div class="kv"><span class="k">PID</span><span class="v">${c.pids ?? "—"}</span></div>
+        </div></td></tr>`;
+      }
+    }
+    body = `<table class="ctab"><thead><tr>
+        <th class="st" data-csort="sev" title="ordina per stato (problemi in cima)">St${arr('sev')}</th>
+        <th data-csort="name">Container${arr('name')}</th>
+        <th class="num" data-csort="cpu">CPU${arr('cpu')}</th>
+        <th class="num" data-csort="mem">MEM${arr('mem')}</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  // overview stile Grafana: numeroni + gauge CPU/MEM aggregati
+  if(conts && conts.length){
+    const runN=conts.filter(c=>c.state==="running").length;
+    const cpuSum=conts.reduce((s,c)=>s+(c.cpu_pct||0),0);
+    const memSum=conts.reduce((s,c)=>s+(c.mem_pct||0),0);
+    const imgs=(d&&!d.error)?d.docker_images:null;
+    const cpus=(d&&!d.error)?d.cpus:null;
+    // docker stats riporta il %CPU relativo a un core → normalizzo sul totale dei core
+    const cpuUtil = cpus ? cpuSum/cpus : cpuSum;
+    const cpuLbl = cpus ? `CPU util. · ${cpus} core` : "CPU util.";
+    body = `<div class="dover">
+      <div class="stat"><div class="sv">${conts.length}</div><div class="sl">Container</div></div>
+      <div class="stat"><div class="sv" style="color:var(--ok)">${runN}</div><div class="sl">Attivi</div></div>
+      ${imgs!=null?`<div class="stat"><div class="sv">${imgs}</div><div class="sl">Immagini</div></div>`:""}
+      ${gaugeSvg(cpuUtil,cpuLbl)}
+      ${gaugeSvg(memSum,"MEM util.")}
+    </div>` + body;
+  }
+  const run = conts ? conts.filter(c=>c.state==="running").length : 0;
+  const tot = conts ? conts.length : 0;
+  const prob = conts ? conts.filter(c=>contState(c)!=="ok").length : 0;
+  const badge = conts==null ? "n/d" : `${run}/${tot} attivi${prob?" · "+prob+" ⚠":""}`;
+  return `<div class="dockcard${coll?' collapsed':''}">
+    <div class="dh" data-dockhead="${escapeHtml(name)}"><span class="chev">▾</span>${WHALE}<span class="nm">${name}</span><span class="ct">${badge}</span></div>
+    <div class="cbody${coll?' hide':''}">${body}</div></div>`;
+}
+
+// ------------------------------------------------------------ render toggles/presets
+function renderToggles(){
+  document.getElementById("netTg").innerHTML =
+    [["rx","↓ RX"],["tx","↑ TX"]].map(([k,l])=>`<span class="tg ${netMetric===k?'on':''}" data-net="${k}">${l}</span>`).join("");
+  document.getElementById("secTg").innerHTML =
+    [["fw","Firewall drop/min"],["ssh","SSH falliti/1h"]].map(([k,l])=>`<span class="tg ${secMetric===k?'on':''}" data-sec="${k}">${l}</span>`).join("");
+  document.getElementById("presets").innerHTML =
+    [15,60,180,360,1440,2880].map(m=>`<span class="tg ${winMin===m?'on':''}" data-win="${m}">${winLabel(m)}</span>`).join("");
+}
+
+// ------------------------------------------------------------ dati e disegno
+let HOSTS=[], HIST={}, LATEST={};
+
+function seriesFor(field){
+  return HOSTS.map((h,i)=>({h,i})).filter(o=>isEnabled(o.h)).map(({h,i})=>({
+    name:h, color:colorFor(h,i),
+    pts:(HIST[h]||[]).map(r=>[r.ts, r[field]])
+  }));
+}
+function lastVal(h, field){
+  const a=HIST[h]||[]; for(let i=a.length-1;i>=0;i--){ if(a[i][field]!=null) return a[i][field]; } return null;
+}
+function renderLegend(elId, field, fmt){
+  const shown = HOSTS.map((h,i)=>({h,i})).filter(o=>isEnabled(o.h));
+  document.getElementById(elId).innerHTML = shown.map(({h,i})=>
+    `<span class="it"><span class="sw" style="background:${colorFor(h,i)}"></span>${h} <b>${fmt(lastVal(h,field))}</b></span>`).join("")
+    || `<span class="it">nessun server selezionato</span>`;
+}
+
+function redraw(){
+  // carosello card host (preservo lo scroll orizzontale + card "aggiungi")
+  const cardsEl = document.getElementById("cards");
+  const sl = cardsEl.scrollLeft;
+  cardsEl.innerHTML = HOSTS.map(h=>hostCard(h, LATEST[h])).join("")
+    + `<div class="addcard" data-add="1"><div class="plus">+</div><div>Aggiungi<br>server</div></div>`;
+  cardsEl.scrollLeft = sl;
+  // rete
+  const netField = netMetric==="rx" ? "net_rx_rate" : "net_tx_rate";
+  drawChart(document.getElementById("netChart"), document.getElementById("netTip"),
+            seriesFor(netField), v=>hrate(v));
+  renderLegend("netLeg", netField, v=>hrate(v));
+  // sicurezza
+  const secField = secMetric==="fw" ? "fw_drop_rate" : "ssh_failed_1h";
+  const secFmt = secMetric==="fw" ? (v=>v==null?"—":v.toFixed(0)+" /min") : (v=>v==null?"—":v.toFixed(0)+" /h");
+  drawChart(document.getElementById("secChart"), document.getElementById("secTip"),
+            seriesFor(secField), v=>secMetric==="fw"? v.toFixed(0) : v.toFixed(0));
+  renderLegend("secLeg", secField, secFmt);
+  // flussi di rete (Sankey)
+  renderFlow();
+  // docker
+  document.getElementById("dockwrap").innerHTML = HOSTS.map(h=>dockerCard(h, LATEST[h])).join("");
+}
+
+function gotoLogin(){ location.href="/login"; }
+
+async function refresh(){
+  let latest;
+  try{
+    const r = await fetch("/api/latest");
+    if(r.status===401){ return gotoLogin(); }
+    latest = await r.json();
+  }
+  catch(e){ document.getElementById("meta").textContent="collector irraggiungibile"; return; }
+  HOSTS = latest.hosts; LATEST = latest.data;
+  HOSTS.forEach((h,i)=>colorFor(h,i));
+  try{ HIST = await (await fetch("/api/history?minutes="+winMin)).json(); }
+  catch(e){ HIST = HIST||{}; }
+  redraw();
+  document.getElementById("meta").textContent =
+    `aggiornato ${new Date().toLocaleTimeString()} · poll ${latest.interval}s · finestra ${winLabel(winMin)} · ${HOSTS.length} server`;
+}
+
+// ------------------------------------------------------------ eventi
+document.addEventListener("click", e=>{
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-flowhost],[data-flowdir]");
+  if(!t) return;
+  if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
+  else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
+  else if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
+                          document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); refresh(); }
+  else if(t.dataset.enh){ toggleHost(t.dataset.enh); redraw(); }
+  else if(t.dataset.csort){ const k=t.dataset.csort;
+                            if(dockSort.key===k){ dockSort.dir*=-1; }
+                            else { dockSort.key=k; dockSort.dir = (k==="cpu"||k==="mem") ? -1 : 1; }
+                            redraw(); }
+  else if(t.dataset.cont){ const h=t.dataset.host;
+                           dockerSel[h] = dockerSel[h]===t.dataset.cont ? null : t.dataset.cont; redraw(); }
+  else if(t.dataset.dockhead){ const h=t.dataset.dockhead;
+                               dockColl.has(h)?dockColl.delete(h):dockColl.add(h); redraw(); }
+  else if(t.dataset.add){ openConfig(); }
+  else if(t.dataset.del){ removeHost(t.dataset.del); }
+  else if(t.dataset.uappr){ userAction(t.dataset.uappr, "approve"); }
+  else if(t.dataset.urej){ userAction(t.dataset.urej, "reject"); }
+  else if(t.dataset.udel){ if(confirm("Eliminare l'utente "+t.dataset.udel+"?")) userAction(t.dataset.udel, "delete"); }
+  else if(t.dataset.urole){ userAction(t.dataset.urole, "role", {role:t.dataset.role}); }
+  else if(t.dataset.flowhost){ flowHost=t.dataset.flowhost; renderFlow(); }
+  else if(t.dataset.flowdir){ const k=t.dataset.flowdir;
+    if(flowDirs.includes(k)){ if(flowDirs.length>1) flowDirs=flowDirs.filter(x=>x!==k); }  // resta ≥1
+    else flowDirs=[...flowDirs,k];
+    renderFlow(); }
+});
+
+// frecce carosello
+document.getElementById("carL").onclick=()=>{const c=document.getElementById("cards");c.scrollBy({left:-c.clientWidth*0.8,behavior:'smooth'});};
+document.getElementById("carR").onclick=()=>{const c=document.getElementById("cards");c.scrollBy({left: c.clientWidth*0.8,behavior:'smooth'});};
+
+// ------------------------------------------------------------ config server
+const ovl=document.getElementById("ovl");
+function openConfig(){ ovl.classList.add("on"); loadCfg(); }
+function closeConfig(){ ovl.classList.remove("on"); }
+async function loadCfg(){
+  const msg=document.getElementById("cfgMsg"); msg.textContent="";
+  try{
+    const r=await (await fetch("/api/hosts")).json();
+    document.getElementById("cfgList").innerHTML = (r.hosts||[]).map(h=>
+      `<div class="hrow"><span class="hn">${escapeHtml(h.name)}</span><span class="ht">${escapeHtml(h.target)}</span>
+        <button class="del" data-del="${escapeHtml(h.name)}">rimuovi</button></div>`).join("")
+      || `<div class="empty">nessun server</div>`;
+  }catch(e){ document.getElementById("cfgList").innerHTML=`<div class="err">errore nel caricamento</div>`; }
+  loadSetup();
+  loadUsers();
+}
+async function loadUsers(){
+  const wrap=document.getElementById("cfgUsersWrap");
+  if(!ME || ME.role!=="admin"){ wrap.style.display="none"; return; }
+  try{
+    const r=await fetch("/api/users");
+    if(!r.ok){ wrap.style.display="none"; return; }
+    const j=await r.json();
+    wrap.style.display="block";
+    document.getElementById("cfgUsers").innerHTML = (j.users||[]).map(u=>{
+      const e=escapeHtml(u.name), pending=u.status==="pending", isAdmin=u.role==="admin";
+      const me=ME && u.name===ME.name;
+      let acts;
+      if(pending){
+        acts=`<button class="ap" data-uappr="${e}">approva</button>`+
+             `<button class="rj" data-urej="${e}">rifiuta</button>`;
+      }else{
+        const role=isAdmin
+          ? `<button class="pr" data-urole="${e}" data-role="user">rendi utente</button>`
+          : `<button class="pr" data-urole="${e}" data-role="admin">rendi admin</button>`;
+        const del=me ? `<span class="me">(tu)</span>` : `<button class="dl" data-udel="${e}">elimina</button>`;
+        acts=role+del;
+      }
+      const bc=pending?'pending':(isAdmin?'admin':''), bt=pending?'in attesa':(isAdmin?'admin':'attivo');
+      return `<div class="usr"><span class="un">${e}</span>
+        <span class="badge ${bc}">${bt}</span>
+        <div class="acts">${acts}</div></div>`;
+    }).join("") || `<div class="empty">nessun utente</div>`;
+  }catch(e){ wrap.style.display="none"; }
+}
+async function userAction(username, action, extra){
+  const msg=document.getElementById("cfgMsg");
+  try{
+    const r=await fetch("/api/users/"+action,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(Object.assign({username}, extra||{}))});
+    const j=await r.json();
+    if(!r.ok){ msg.className="msg err"; msg.textContent=j.error||"errore"; return; }
+    const verb={approve:"approvato",reject:"rimosso",delete:"eliminato",role:"ruolo aggiornato per"}[action]||"aggiornato";
+    msg.className="msg ok"; msg.textContent=verb+": "+username;
+    loadUsers();
+  }catch(e){ msg.className="msg err"; msg.textContent="errore di rete"; }
+}
+async function loadSetup(){
+  try{
+    const s=await (await fetch("/api/setup")).json();
+    document.getElementById("cfgSetup").innerHTML =
+      `<div class="k">1) Installa la sonda sul nuovo server in <b>${escapeHtml(s.probe_path)}</b> (chmod 755).</div>
+       <div class="k">2) Aggiungi questa riga ad <b>~/.ssh/authorized_keys</b> dell'utente del target:</div>
+       <pre>${escapeHtml(s.authorized_keys_line||"")}</pre>
+       <div class="k">Chiave pubblica di monitoraggio:</div>
+       <pre>${escapeHtml(s.pubkey||"(non disponibile)")}</pre>`;
+  }catch(e){}
+}
+function clearCfgForm(){
+  document.getElementById("cfgName").value="";
+  document.getElementById("cfgTarget").value="";
+  document.getElementById("cfgPass").value="";   // scarto la credenziale dalla UI
+}
+async function addHost(){
+  const name=document.getElementById("cfgName").value.trim();
+  const target=document.getElementById("cfgTarget").value.trim();
+  const msg=document.getElementById("cfgMsg");
+  try{
+    const r=await fetch("/api/hosts",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,target})});
+    const j=await r.json();
+    if(!r.ok){ msg.className="msg err"; msg.textContent=j.error||"errore"; return; }
+    msg.className="msg ok"; msg.textContent="aggiunto — interrogato al prossimo ciclo (setup chiave/sonda necessario)";
+    clearCfgForm(); loadCfg(); refresh();
+  }catch(e){ msg.className="msg err"; msg.textContent="errore di rete"; }
+}
+async function enrollHost(){
+  const name=document.getElementById("cfgName").value.trim();
+  const target=document.getElementById("cfgTarget").value.trim();
+  const password=document.getElementById("cfgPass").value;
+  const msg=document.getElementById("cfgMsg");
+  if(!password){ msg.className="msg err"; msg.textContent="inserisci la password di bootstrap per l'installazione automatica"; return; }
+  msg.className="msg"; msg.textContent="installazione della sonda via SSH in corso…";
+  try{
+    const r=await fetch("/api/enroll",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,target,password})});
+    const j=await r.json();
+    document.getElementById("cfgPass").value="";   // scarto la password appena usata
+    if(!r.ok){ msg.className="msg err"; msg.textContent=j.error||"errore"; return; }
+    msg.className="msg ok"; msg.textContent="✓ "+(j.message||"sonda installata");
+    clearCfgForm(); loadCfg(); refresh();
+  }catch(e){ document.getElementById("cfgPass").value=""; msg.className="msg err"; msg.textContent="errore di rete"; }
+}
+async function doLogout(){
+  try{ await fetch("/api/logout",{method:"POST"}); }catch(e){}
+  gotoLogin();
+}
+async function removeHost(name){
+  const msg=document.getElementById("cfgMsg");
+  try{
+    const r=await fetch("/api/hosts?name="+encodeURIComponent(name),{method:"DELETE"});
+    await r.json(); msg.className="msg ok"; msg.textContent="rimosso: "+name;
+    loadCfg(); refresh();
+  }catch(e){ msg.className="msg err"; msg.textContent="errore di rete"; }
+}
+document.getElementById("gear").onclick=openConfig;
+document.getElementById("cfgX").onclick=closeConfig;
+ovl.onclick=(e)=>{ if(e.target===ovl) closeConfig(); };
+document.getElementById("cfgAdd").onclick=addHost;
+document.getElementById("cfgEnroll").onclick=enrollHost;
+document.getElementById("logout").onclick=doLogout;
+
+async function loadMe(){
+  try{
+    const r=await fetch("/api/me");
+    if(r.status===401){ return gotoLogin(); }
+    ME=await r.json();
+    document.getElementById("who").innerHTML =
+      `<b>${escapeHtml(ME.name||"")}</b>${ME.role==="admin"?' <span class="rl">admin</span>':''}`;
+    if(ME.version){
+      document.getElementById("ver").innerHTML =
+        `<b>${escapeHtml(ME.version)}</b> · ${escapeHtml(ME.build||"")}<br><span class="au">${escapeHtml(ME.author||"")}</span>`;
+    }
+  }catch(e){}
+}
+const winEl=document.getElementById("win");
+winEl.addEventListener("input", ()=>{ winMin=sliderToMin(+winEl.value);
+  document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); });
+winEl.addEventListener("change", ()=>refresh());
+window.addEventListener("resize", ()=>{ if(HOSTS.length) redraw(); });
+
+// avvio
+const dt=document.getElementById("dockTitle");
+dt.style.display="flex"; dt.style.alignItems="center"; dt.style.gap="9px";
+dt.innerHTML = WHALE + "<span>Docker — container per server</span>";
+winMin = sliderToMin(+winEl.value);
+document.getElementById("winval").textContent = winLabel(winMin);
+renderToggles();
+loadMe();
+refresh();
+setInterval(refresh, REFRESH);
+</script>
+</body>
+</html>

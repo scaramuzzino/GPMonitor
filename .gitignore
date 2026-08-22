@@ -1,0 +1,14 @@
+# dati runtime e segreti (non versionare)
+collector/data/
+collector/ssh/
+data/
+ssh/
+*.migrated
+.bak-*
+# cache python
+__pycache__/
+*.pyc
+# temporanei
+*.tmp
+*.swp
+.DS_Store
