@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.7"
+VERSION = "v2.8"
 BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
@@ -540,28 +540,72 @@ def _dedup_vulns(vulns):
     return arr if NMAP_VULN_CAP <= 0 else arr[:NMAP_VULN_CAP]
 
 
-# mappa prodotto -> pacchetto APT (i server sono Ubuntu): remediation via apt-get
+# mappa prodotto -> pacchetto APT (i server sono Ubuntu): remediation via apt-get.
+# NB: l'ordine conta (match per sottostringa): i nomi COMPOSTI/specifici vanno PRIMA
+# di quelli generici (es. "tomcat"/"coyote" prima di "apache").
 _APT_PKG = [
-    ("openssh", "openssh-server"), ("nginx", "nginx"), ("apache", "apache2"),
-    ("httpd", "apache2"), ("postfix", "postfix"), ("dovecot", "dovecot-core"),
+    # --- SSH / remote ---
+    ("openssh", "openssh-server"), ("dropbear", "dropbear"),
+    # --- web server / proxy (specifici prima dei generici) ---
+    ("tomcat", "tomcat9"), ("coyote", "tomcat9"), ("jetty", "jetty9"),
+    ("lighttpd", "lighttpd"), ("haproxy", "haproxy"), ("varnish", "varnish"),
+    ("squid", "squid"), ("nginx", "nginx"), ("apache", "apache2"), ("httpd", "apache2"),
+    # --- mail ---
+    ("postfix", "postfix"), ("exim", "exim4"), ("sendmail", "sendmail"),
+    ("dovecot", "dovecot-core"), ("cyrus", "cyrus-imapd"),
+    # --- database / cache ---
     ("postgresql", "postgresql"), ("mariadb", "mariadb-server"), ("mysql", "mysql-server"),
-    ("exim", "exim4"), ("bind", "bind9"), ("openssl", "openssl"), ("vsftpd", "vsftpd"),
-    ("proftpd", "proftpd-basic"), ("samba", "samba"), ("redis", "redis-server"),
-    ("memcached", "memcached"), ("php", "php"),
+    ("redis", "redis-server"), ("memcached", "memcached"), ("mongodb", "mongodb-org-server"),
+    ("rabbitmq", "rabbitmq-server"),
+    # --- ftp ---
+    ("vsftpd", "vsftpd"), ("proftpd", "proftpd-basic"), ("pure-ftpd", "pure-ftpd"),
+    # --- rete / infra ---
+    ("bind", "bind9"), ("unbound", "unbound"), ("dnsmasq", "dnsmasq"),
+    ("isc-dhcp", "isc-dhcp-server"), ("dhcpd", "isc-dhcp-server"),
+    ("openvpn", "openvpn"), ("strongswan", "strongswan"), ("openswan", "strongswan"),
+    ("ipsec", "strongswan"), ("chrony", "chrony"), ("ntpd", "ntp"), ("ntp", "ntp"),
+    ("net-snmp", "snmpd"), ("snmp", "snmpd"), ("rsync", "rsync"), ("samba", "samba"),
+    ("cups", "cups"), ("mosquitto", "mosquitto"),
+    # --- runtime / linguaggi (aggiornabili via apt su Ubuntu) ---
+    ("openssl", "openssl"), ("php", "php"),
 ]
-# prodotti applicativi non gestiti da APT (dipendenze del progetto)
+# prodotti applicativi/dipendenze non gestiti da APT: si aggiornano nel progetto
 _APP_HINT = {
-    "werkzeug": ("Python", "pip install -U werkzeug   # poi aggiorna requirements.txt e ridispiega"),
-    "uvicorn":  ("Python", "pip install -U uvicorn"),
-    "gunicorn": ("Python", "pip install -U gunicorn"),
-    "flask":    ("Python", "pip install -U flask"),
-    "django":   ("Python", "pip install -U django"),
-    "tornado":  ("Python", "pip install -U tornado"),
-    "basehttpserver": ("Python", "è il server stdlib di gp-monitor stesso: aggiorna Python base image e ridispiega il container"),
-    "simplehttp": ("Python", "server stdlib: aggiorna la base image Python e ridispiega"),
-    "golang":   ("Go", "aggiorna il modulo/binario Go e ricompila: go get -u ./... && go build"),
-    "node":     ("Node", "npm update (o aggiorna package.json) e ridispiega"),
-    "express":  ("Node", "npm update express"),
+    # Python (framework/server WSGI-ASGI; il numero di versione è quello del pacchetto pip)
+    "werkzeug":  ("Python", "pip install -U werkzeug     # poi aggiorna requirements.txt e ridispiega"),
+    "uvicorn":   ("Python", "pip install -U uvicorn"),
+    "gunicorn":  ("Python", "pip install -U gunicorn"),
+    "fastapi":   ("Python", "pip install -U fastapi"),
+    "starlette": ("Python", "pip install -U starlette"),
+    "aiohttp":   ("Python", "pip install -U aiohttp"),
+    "tornado":   ("Python", "pip install -U tornado"),
+    "twisted":   ("Python", "pip install -U twisted"),
+    "flask":     ("Python", "pip install -U flask"),
+    "django":    ("Python", "pip install -U django"),
+    "cheroot":   ("Python", "pip install -U cheroot cherrypy"),
+    "cherrypy":  ("Python", "pip install -U cherrypy"),
+    "basehttpserver": ("Python", "è il server stdlib di gp-monitor stesso: aggiorna la base image Python del container (Dockerfile) e ridispiega"),
+    "simplehttp":     ("Python", "server http stdlib: aggiorna la base image Python e ridispiega"),
+    # Go
+    "golang":  ("Go", "aggiorna il modulo/binario Go e ricompila: go get -u ./... && go build"),
+    "gin":     ("Go", "aggiorna il modulo Go: go get -u && go build"),
+    "traefik": ("Go", "aggiorna l'immagine/binario Traefik (release ufficiali) e ridispiega"),
+    "caddy":   ("Go", "aggiorna il binario Caddy (release ufficiali) e ridispiega"),
+    "envoy":   ("Go/C++", "aggiorna l'immagine Envoy e ridispiega"),
+    "prometheus": ("Go", "aggiorna il binario Prometheus (release ufficiali)"),
+    "grafana": ("Go", "aggiorna il pacchetto/immagine Grafana (repo ufficiale)"),
+    "consul":  ("Go", "aggiorna il binario Consul (HashiCorp releases)"),
+    # Node
+    "express": ("Node", "npm update express     # poi ridispiega"),
+    "fastify": ("Node", "npm update fastify"),
+    "node":    ("Node", "npm update (o aggiorna package.json) e ridispiega"),
+    # Ruby / Java / .NET
+    "puma":      ("Ruby", "bundle update puma"),
+    "passenger": ("Ruby", "gem update passenger / bundle update"),
+    "kestrel":   (".NET", "aggiorna il runtime .NET e ripubblica l'app"),
+    # container runtime
+    "docker":     ("Docker", "aggiorna docker-ce dal repo ufficiale Docker; ricrea i container"),
+    "containerd": ("Docker", "aggiorna containerd.io dal repo ufficiale Docker"),
 }
 
 
@@ -645,6 +689,32 @@ def build_remediation(result):
     ]
     return {"items": items, "notes": notes,
             "totals": {"cve": total_cve, "exploit": total_expl, "services": len(items)}}
+
+
+def scan_summary(result):
+    """Riepilogo per il KPI di sicurezza RAG sulla card: CVE deduplicate per id,
+    con conteggio criticità / alte / con-exploit e porte aperte."""
+    if not result:
+        return None
+    seen = {}
+    for p in result.get("ports", []):
+        for v in (p.get("vulns") or []):
+            k = v.get("id")
+            c = v.get("cvss") or 0
+            e = seen.get(k)
+            if e is None or c > (e["cvss"] or 0):
+                seen[k] = {"cvss": c, "exploit": bool(v.get("exploit")) or (e["exploit"] if e else False)}
+            elif v.get("exploit"):
+                seen[k]["exploit"] = True
+    vals = list(seen.values())
+    return {
+        "cve": len(vals),
+        "exploit": sum(1 for v in vals if v["exploit"]),
+        "critical": sum(1 for v in vals if (v["cvss"] or 0) >= 9),
+        "high": sum(1 for v in vals if 7 <= (v["cvss"] or 0) < 9),
+        "open_ports": len(result.get("ports", [])),
+        "up": bool(result.get("up")),
+    }
 
 
 def parse_nmap_xml(xml_text):
@@ -894,6 +964,22 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"nmap_enabled": NMAP_ENABLED, "nmap_vuln": NMAP_VULN,
                              "nmap_deep": NMAP_DEEP, "nmap_top_ports": NMAP_TOP_PORTS,
                              "nmap_interval_hours": NMAP_INTERVAL_H})
+        elif u.path == "/api/scans":
+            # riepiloghi per il KPI di sicurezza RAG delle card (tutti gli host)
+            now = int(time.time())
+            out = {}
+            with _scan_lock:
+                running = set(_scans_running)
+            for name, _t in list(HOSTS):
+                cur = get_scan(name)
+                if cur:
+                    s = scan_summary(cur["result"]) or {}
+                    s.update({"ts": cur["ts"], "age": now - cur["ts"],
+                              "status": cur["status"], "running": name in running})
+                    out[name] = s
+                else:
+                    out[name] = {"status": "none", "running": name in running}
+            self._json(200, {"scans": out, "enabled": NMAP_ENABLED, "vuln": NMAP_VULN})
         elif u.path == "/api/scan":
             q = parse_qs(u.query)
             host = (q.get("host") or [""])[0]

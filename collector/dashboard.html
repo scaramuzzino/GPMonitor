@@ -16,7 +16,7 @@
   header .brand{display:flex;flex-direction:column;gap:1px}
   header .brand .top{display:flex;align-items:center;gap:9px}
   header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.2px}
-  header .brand .au{color:var(--mut);font-size:11.5px;font-weight:500}
+  header .brand .au{color:var(--accent);font-style:italic;font-size:11.5px;font-weight:500}
   header .meta{color:var(--mut);font-size:12px}
   .content{padding:18px;display:flex;flex-direction:column;gap:16px}
 
@@ -358,6 +358,23 @@
   .remcmd{background:#010409;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:9px;
     font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#7ee787;overflow-x:auto}
   .remcmd .cmt{color:var(--mut)}
+  /* ---- modale copia testo ---- */
+  .modal.copy{max-width:760px;width:92vw}
+  .modal.copy .copyhint{color:var(--mut);font-size:12px;margin-bottom:8px}
+  #copyArea{width:100%;height:52vh;background:#010409;color:#c9d1d9;border:1px solid var(--line);
+    border-radius:8px;padding:11px 13px;font-family:ui-monospace,Menlo,monospace;font-size:12px;
+    line-height:1.55;resize:vertical;white-space:pre;overflow:auto}
+  .remitem .copycmd{margin-top:8px;font-size:11px;color:var(--accent);cursor:pointer;
+    border:1px solid var(--line);border-radius:20px;padding:2px 10px;display:inline-block}
+  .remitem .copycmd:hover{border-color:var(--accent)}
+  /* ---- KPI sicurezza RAG sulla card ---- */
+  .kpi{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:20px;
+    padding:2px 9px;cursor:pointer;border:1px solid;font-variant-numeric:tabular-nums;vertical-align:middle}
+  .kpi.red{color:var(--bad);border-color:var(--bad);background:#2a1213}
+  .kpi.amber{color:var(--warn);border-color:var(--warn);background:#241d0f}
+  .kpi.green{color:var(--ok);border-color:var(--ok);background:#0f2417}
+  .kpi.grey{color:var(--mut);border-color:var(--line);background:transparent;font-weight:600}
+  .kpi.run{opacity:.6}
   .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
   .scan-scanning b{color:var(--fg)}
   .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
@@ -375,7 +392,7 @@
 <header>
   <div class="brand">
     <div class="top"><h1>GP&nbsp;monitor</h1><span class="verbadge" id="ver"></span></div>
-    <div class="au">Stefano Scaramuzzino</div>
+    <div class="au">(c) Stefano Scaramuzzino</div>
   </div>
   <span class="meta" id="meta">avvio…</span>
   <span class="who" id="who"></span>
@@ -444,6 +461,19 @@
   </div>
 </div>
 
+<!-- modale copia testo (analisi + remediation) -->
+<div class="ovl" id="copyOvl">
+  <div class="modal copy">
+    <div class="mhead"><b id="copyTitle">Copia</b><span class="x" id="copyX">✕</span></div>
+    <div class="copyhint">Seleziona tutto e incolla dove vuoi (es. in chat con l'assistente per un'analisi).</div>
+    <textarea id="copyArea" readonly spellcheck="false"></textarea>
+    <div class="mform" style="justify-content:flex-end;gap:10px">
+      <span class="msg ok" id="copyMsg" style="margin:0;flex:1"></span>
+      <button id="copyBtn">📋 Copia negli appunti</button>
+    </div>
+  </div>
+</div>
+
 <!-- modale configurazione server -->
 <div class="ovl" id="ovl">
   <div class="modal">
@@ -501,6 +531,8 @@ function barClass(p){ return p>=90?"bar bad":p>=75?"bar warn":"bar"; }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // mini-markdown: **grassetto** e `codice` (dopo escape)
 function mdBold(s){ return escapeHtml(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>'); }
+// versione testuale: rimuove i marcatori markdown
+function plain(s){ return String(s).replace(/\*\*(.+?)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1'); }
 function hm(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes()); }
 function hms(ts){ const d=new Date(ts*1000); const p=x=>String(x).padStart(2,'0'); return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
 
@@ -758,9 +790,37 @@ function scanBtn(name){
   return `<span class="scanbtn" data-scan="${escapeHtml(name)}"
     title="stato & scansione nmap di ${escapeHtml(name)} (porte, servizi, OS, CVE)">📊 Status</span>`;
 }
+// KPI di sicurezza RAG (rosso/ambra/verde) da /api/scans — cliccabile apre lo Status drawer
+let SCAN_KPI = {};   // { host: {cve,exploit,critical,high,open_ports,up,status,running,...} }
+function secKpi(name){
+  const s = SCAN_KPI[name];
+  if(!s || s.status==="none" || s.status==null){
+    return `<span class="kpi grey" data-scan="${escapeHtml(name)}" title="nessuna scansione ancora — apri Status per avviarla">🛡 —</span>`;
+  }
+  if(s.running && (s.status==="none")){
+    return `<span class="kpi run" data-scan="${escapeHtml(name)}" title="scansione in corso…">🛡 …</span>`;
+  }
+  const crit=s.critical||0, high=s.high||0, expl=s.exploit||0, cve=s.cve||0;
+  let cls, tip;
+  if(expl>0 || crit>0){ cls="red"; tip=`${cve} CVE · ${crit} critiche · ${expl} con exploit noto`; }
+  else if(high>0){ cls="amber"; tip=`${cve} CVE · ${high} gravi (7–9)`; }
+  else if(cve>0){ cls="amber"; tip=`${cve} CVE (nessuna grave)`; }
+  else { cls="green"; tip="nessuna CVE correlata"; }
+  const num = (expl>0||crit>0) ? (crit+expl) : (high>0 ? high : cve);
+  return `<span class="kpi ${cls}" data-scan="${escapeHtml(name)}" title="Sicurezza: ${tip} — apri Status">🛡 ${num}</span>`;
+}
+async function loadScans(){
+  try{
+    const r=await fetch("/api/scans",{credentials:"same-origin"});
+    if(!r.ok) return;
+    const j=await r.json();
+    SCAN_KPI = j.scans || {};
+    if(typeof HOSTS!=="undefined" && HOSTS.length) redraw();
+  }catch(e){}
+}
 function hostCard(name, d){
   if(!d || d.error){
-    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
+    return `<div class="card${isEnabled(name)?'':' off'}"><h2><span class="dot bad"></span>${name}${secKpi(name)}${scanBtn(name)}${enhPill(name)}</h2>
       <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
   }
   const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
@@ -773,7 +833,7 @@ function hostCard(name, d){
       <div class="${barClass(dk.use_pct)}"><i style="width:${dk.use_pct}%"></i></div></div>`).join("")
     || '<div class="empty">—</div>';
   return `<div class="card${isEnabled(name)?'':' off'}">
-    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
+    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${secKpi(name)}${scanBtn(name)}${enhPill(name)}</h2>
     <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
     <div class="grid2">
       <div class="metric"><div class="label">RAM</div>
@@ -968,7 +1028,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -1003,6 +1063,11 @@ document.addEventListener("click", e=>{
   else if(t.dataset.pexp){ const p=+t.dataset.pexp;
     scanExpanded.has(p)?scanExpanded.delete(p):scanExpanded.add(p);
     if(scanData) renderScan(scanData); }
+  else if(t.dataset.copy){ if(scanData) openCopy("Analisi & Remediation — "+(scanData.host||""), buildScanText(scanData)); }
+  else if(t.dataset.copycmd){ const it=scanData&&scanData.remediation&&scanData.remediation.items&&scanData.remediation.items[+t.dataset.copycmd];
+    if(it){ const txt=(it.commands||[]).join("\n");
+      copyClip(txt).then(ok=>{ if(!ok) openCopy("Comandi — "+(it.service||""), txt);
+        else { t.textContent="✓ copiati"; setTimeout(()=>{ t.textContent="📋 copia comandi"; }, 1500); } }); } }
 });
 
 // frecce carosello
@@ -1219,7 +1284,7 @@ document.getElementById("usrOvl").onclick=closeUsers;
 document.getElementById("nuCreate").onclick=createUser;
 document.getElementById("scanX").onclick=closeScan;
 document.getElementById("scanOvl").onclick=closeScan;
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeUsers(); closeConfig(); closeScan(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeCopy(); closeUsers(); closeConfig(); closeScan(); } });
 
 // ------------------------------------------------------------ scansione nmap (drawer)
 let scanHost=null, scanTimer=null, scanData=null;
@@ -1287,7 +1352,7 @@ async function loadScan(showLoading){
     if(!scanHost) return;              // drawer chiuso nel frattempo
     scanData=j; renderScan(j);
     if(j.running && !scanTimer){ scanTimer=setInterval(()=>loadScan(false), 3000); }
-    if(!j.running && scanTimer){ clearInterval(scanTimer); scanTimer=null; }
+    if(!j.running && scanTimer){ clearInterval(scanTimer); scanTimer=null; loadScans(); }
   }catch(e){
     if(showLoading) document.getElementById("scanBody").innerHTML=`<div class="scan-err">errore di rete</div>`;
   }
@@ -1322,6 +1387,8 @@ function renderScan(j){
   const remN = (j.remediation&&j.remediation.items) ? j.remediation.items.length : 0;
   const remBtn = remN
     ? `<button class="rescan rembtn ${scanView==='remediation'?'active':''}" data-remview="${scanView==='remediation'?'report':'remediation'}">${scanView==='remediation'?'‹ Torna al report':'🛡 Remediation ('+remN+')'}</button>` : "";
+  const copyBtnHero = (j.status!=="none")
+    ? `<button class="rescan copybtn" data-copy="1">📋 Copia analisi</button>` : "";
   const ipObj=(res.addresses||[]).find(a=>a.type&&a.type.indexOf("ip")===0);
   const ip = ipObj ? ipObj.addr : "";
   const up = !!res.up;
@@ -1332,7 +1399,7 @@ function renderScan(j){
       <b style="font-size:16px">${escapeHtml(j.host)}</b>
       ${ip?`<span class="ip">${escapeHtml(ip)}</span>`:""}
       <span class="stpill ${up?"up":"down"}">${up?"● raggiungibile":"○ non raggiungibile"}</span>
-      ${fresh}</div><div class="hero-btns">${rescanBtn}${remBtn}</div></div>`;
+      ${fresh}</div><div class="hero-btns">${rescanBtn}${remBtn}${copyBtnHero}</div></div>`;
 
   if(j.status==="error"){
     body.innerHTML=hero+`<div class="scan-err">⚠ scansione fallita: ${escapeHtml(res.error||"errore")}</div>`;
@@ -1433,7 +1500,7 @@ function remediationHtml(rem){
   const sevLabel={high:"ALTA",med:"MEDIA",low:"BASSA"}, sevColor={high:"#f85149",med:"#f0883e",low:"#d29922"};
   let h=`<div class="dwsec first">Remediation <span class="cvsub">${rem.items.length} servizi · ${t.cve||0} CVE${t.exploit?` · ${t.exploit} con exploit noto ⚡`:""}</span></div>`;
   h+=`<div class="remnotes"><b>Note & priorità</b><ul>`+rem.notes.map(n=>`<li>${mdBold(n)}</li>`).join("")+`</ul></div>`;
-  h+=rem.items.map(it=>{
+  h+=rem.items.map((it,idx)=>{
     const col=sevColor[it.sev]||"#6e7681";
     const cmds=(it.commands||[]).map(c=>c.trim().startsWith("#")?`<span class="cmt">${escapeHtml(c)}</span>`:escapeHtml(c)).join("\n");
     const kindTag=it.kind==="apt"?`<span class="rk apt">APT · ${escapeHtml(it.pkg||"")}</span>`
@@ -1449,11 +1516,93 @@ function remediationHtml(rem){
       </div>
       <div class="remaction">${mdBold(it.action)}</div>
       ${cmds?`<pre class="remcmd">${cmds}</pre>`:""}
+      ${(it.commands&&it.commands.length)?`<span class="copycmd" data-copycmd="${idx}">📋 copia comandi</span>`:""}
       ${cves?`<div class="pvulns" style="margin-top:8px">${cves}</div>`:""}
     </div>`;
   }).join("");
   return h;
 }
+
+// ---- esportazione testuale (analisi + remediation) da incollare ----
+function buildScanText(j){
+  const res=j.result||{}, rem=j.remediation||{};
+  const L=[];
+  const ipObj=(res.addresses||[]).find(a=>a.type&&a.type.indexOf("ip")===0);
+  const os=(res.os&&res.os[0])||null;
+  L.push("# GP Monitor — Analisi sicurezza & Remediation");
+  L.push("Host: "+j.host+(ipObj?"  ("+ipObj.addr+")":""));
+  L.push("Stato: "+(res.up?"raggiungibile":"non raggiungibile"));
+  if(os) L.push("OS (nmap): "+os.name+"  ("+os.accuracy+"%)");
+  L.push("Scan: "+(j.ts?new Date(j.ts*1000).toISOString():"?")
+    +(res.elapsed?"  durata "+res.elapsed.toFixed(0)+"s":"")
+    +(res.nmap_version?"  nmap "+res.nmap_version:"")
+    +(j.deep?"  profondità: tutte le porte (-p-)":""));
+  const ports=(res.ports||[]);
+  L.push(""); L.push("## Porte aperte ("+ports.length+")");
+  ports.forEach(p=>{
+    const ver=[p.product,p.version,p.extrainfo?("("+p.extrainfo+")"):""].filter(Boolean).join(" ");
+    const nv=(p.vulns||[]).length, ne=(p.vulns||[]).filter(v=>v.exploit).length;
+    L.push("- "+p.port+"/"+(p.proto||"tcp")+"  "+(p.service||"?")+(ver?"  "+ver:"")
+      +(nv?"   ["+nv+" CVE"+(ne?", "+ne+" con exploit":"")+"]":""));
+  });
+  const cves=topCves(res);
+  if(cves.length){
+    const expl=cves.filter(v=>v.exploit).length, crit=cves.filter(v=>(v.cvss||0)>=9).length;
+    L.push(""); L.push("## Vulnerabilità (CVE) — totale "+cves.length+", critiche "+crit+", con exploit noto "+expl);
+    L.push("NB: correlazione vulners basata sulla versione UPSTREAM; NON tiene conto dei backport");
+    L.push("    di sicurezza di Ubuntu -> possibili FALSI POSITIVI. Priorità agli exploit noti (⚡).");
+    cves.slice(0,40).forEach(v=>{
+      L.push("- "+(v.cvss!=null?v.cvss.toFixed(1):"n/d")+"\t"+v.id+(v.exploit?"  ⚡exploit":"")
+        +"  (porta "+[...v.ports].sort((a,b)=>a-b).join(",")+")");
+    });
+    if(cves.length>40) L.push("  … e altre "+(cves.length-40));
+  }
+  if(rem.items&&rem.items.length){
+    const t=rem.totals||{};
+    L.push(""); L.push("## Remediation — "+rem.items.length+" servizi, "+(t.cve||0)+" CVE, "+(t.exploit||0)+" con exploit");
+    (rem.notes||[]).forEach(n=>L.push("- "+plain(n)));
+    rem.items.forEach(it=>{
+      L.push("");
+      L.push("["+(({high:"ALTA",med:"MEDIA",low:"BASSA"})[it.sev]||it.sev)+"] "+(it.service||"?")
+        +" — porta "+it.port+"/"+(it.proto||"tcp")
+        +" — "+it.cve_count+" CVE (max "+(it.max_cvss?it.max_cvss.toFixed(1):"—")+(it.exploit?", "+it.exploit+" exploit":"")+")");
+      L.push("Azione: "+plain(it.action));
+      if(it.commands&&it.commands.length){ L.push("Comandi:"); it.commands.forEach(c=>L.push("  "+c)); }
+    });
+  }
+  L.push(""); L.push("— generato da GP Monitor ("+(j.host||"")+"), (c) Stefano Scaramuzzino");
+  return L.join("\n");
+}
+function copyRaw(text){
+  const ta=document.createElement("textarea");
+  ta.value=text; ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok=false; try{ ok=document.execCommand("copy"); }catch(e){ ok=false; }
+  document.body.removeChild(ta); return ok;
+}
+async function copyClip(text){
+  try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  return copyRaw(text);   // http (Tailscale) non è secure context -> fallback execCommand
+}
+function openCopy(title, text){
+  document.getElementById("copyTitle").textContent=title;
+  document.getElementById("copyMsg").textContent="";
+  const ta=document.getElementById("copyArea"); ta.value=text;
+  document.getElementById("copyOvl").classList.add("on");
+  setTimeout(()=>{ ta.focus(); ta.select(); }, 60);
+}
+function closeCopy(){ document.getElementById("copyOvl").classList.remove("on"); }
+async function doCopy(){
+  const ta=document.getElementById("copyArea");
+  const ok=await copyClip(ta.value);
+  const m=document.getElementById("copyMsg");
+  m.textContent = ok ? "✓ copiato negli appunti" : "seleziona il testo e copia manualmente (Ctrl/Cmd+C)";
+  m.className = "msg "+(ok?"ok":"err");
+  ta.focus(); ta.select();
+}
+document.getElementById("copyBtn").onclick=doCopy;
+document.getElementById("copyX").onclick=closeCopy;
+document.getElementById("copyOvl").onclick=(e)=>{ if(e.target.id==="copyOvl") closeCopy(); };
 
 async function loadMe(){
   try{
@@ -1486,6 +1635,9 @@ renderToggles();
 loadMe();
 refresh();
 setInterval(refresh, REFRESH);
+// KPI di sicurezza: subito dopo il primo refresh, poi ogni 60s
+setTimeout(loadScans, 1200);
+setInterval(loadScans, 60000);
 </script>
 </body>
 </html>
