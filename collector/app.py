@@ -22,8 +22,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.2"
-BUILD_DATE = "2026-08-22"
+VERSION = "v2.4"
+BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
 # ---------------------------------------------------------------- config
@@ -633,6 +633,44 @@ class Handler(BaseHTTPRequestHandler):
 
         if u.path == "/api/logout":
             return self._json_cookie(200, {"ok": True}, cookie_str("", 0))
+
+        if u.path == "/api/users/create":
+            if user["role"] != "admin":
+                return self._json(403, {"error": "richiede admin"})
+            b = self._read_json()
+            un = (b.get("username") or "").strip()
+            pw = b.get("password") or ""
+            role = (b.get("role") or "user").strip()
+            if not USER_RE.match(un):
+                return self._json(400, {"error": "username non valido (3-32: lettere, cifre, . _ -)"})
+            if len(pw) < 8:
+                return self._json(400, {"error": "la password deve avere almeno 8 caratteri"})
+            if role not in ("admin", "user"):
+                return self._json(400, {"error": "ruolo non valido"})
+            with _users_lock:
+                if un in USERS:
+                    return self._json(400, {"error": "utente già esistente"})
+                make_user(un, pw, role, "active")   # creato da admin → subito attivo
+                save_users()
+            return self._json(200, {"ok": True})
+
+        if u.path == "/api/users/password":
+            if user["role"] != "admin":
+                return self._json(403, {"error": "richiede admin"})
+            b = self._read_json()
+            un = (b.get("username") or "").strip()
+            pw = b.get("password") or ""
+            if len(pw) < 8:
+                return self._json(400, {"error": "la password deve avere almeno 8 caratteri"})
+            with _users_lock:
+                rec = USERS.get(un)
+                if not rec:
+                    return self._json(404, {"error": "utente inesistente"})
+                salt = secrets.token_hex(16)      # rigenero salt+hash (le vecchie sessioni restano valide)
+                rec["salt"] = salt
+                rec["hash"] = hash_pw(pw, salt)
+                save_users()
+            return self._json(200, {"ok": True})
 
         if u.path in ("/api/users/approve", "/api/users/reject",
                       "/api/users/delete", "/api/users/role"):

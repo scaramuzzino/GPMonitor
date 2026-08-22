@@ -48,8 +48,12 @@
              margin:14px 0 4px;border-top:1px solid var(--line);padding-top:10px}
   .err{color:var(--bad);font-size:12.5px;padding:8px 0}
 
-  /* ---- strip (rete / sicurezza) a tutta larghezza ---- */
+  /* ---- strip (rete / sicurezza) ---- */
   .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  /* rete + sicurezza affiancate (metà larghezza ciascuna); collassa a 1 colonna su schermi stretti */
+  .panel-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-width:0}
+  .panel-row .panel{min-width:0}
+  @media (max-width:900px){ .panel-row{grid-template-columns:1fr} }
   .panel-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
   .panel-head h3{font-size:14px;margin:0;font-weight:600}
   .toggles{display:flex;gap:6px}
@@ -210,6 +214,40 @@
   .stat .sl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
   .gauge{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:6px 4px 4px;text-align:center}
   .gauge .gl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:-2px}
+
+  /* ---- drawer gestione utenti (slide da destra) ---- */
+  .drawer-ovl{position:fixed;inset:0;background:#00000080;display:none;z-index:60}
+  .drawer-ovl.on{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(440px,94vw);background:var(--card);
+          border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(0,0,0,.55);
+          transform:translateX(100%);transition:transform .22s ease;z-index:61;
+          display:flex;flex-direction:column}
+  .drawer.on{transform:translateX(0)}
+  .dwh{display:flex;align-items:center;gap:8px;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .dwh b{font-size:15px}
+  .dwh .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:16px}
+  .dwh .x:hover{color:var(--fg)}
+  .dwbody{padding:14px 18px 22px;overflow:auto;flex:1}
+  .dwsec{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;
+         margin:18px 0 6px;border-top:1px solid var(--line);padding-top:12px}
+  .dwsec.first{margin-top:0;border-top:0;padding-top:0}
+  .usr .acts .pw:hover{border-color:var(--accent);color:var(--accent)}
+  .pwedit{display:flex;gap:6px;margin:2px 0 10px}
+  .pwedit input{flex:1;background:#0d1117;border:1px solid var(--line);border-radius:7px;color:var(--fg);
+                padding:6px 9px;font-size:12.5px}
+  .pwedit input:focus{outline:none;border-color:var(--accent)}
+  .pwedit button{border:1px solid var(--line);border-radius:7px;background:#0d1117;color:var(--fg);
+                 padding:2px 11px;font-size:12px;cursor:pointer}
+  .pwedit button:hover{border-color:var(--accent)}
+  .newuser{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  .newuser input,.newuser select{background:#0d1117;border:1px solid var(--line);border-radius:7px;
+        color:var(--fg);padding:8px 10px;font-size:13px}
+  .newuser input:focus,.newuser select:focus{outline:none;border-color:var(--accent)}
+  .newuser button{background:#238636;border:1px solid #2ea043;color:#fff;border-radius:7px;padding:9px 14px;
+        font-size:13px;font-weight:600;cursor:pointer}
+  .newuser button:hover{background:#2ea043}
+  .dwmsg{font-size:12.5px;min-height:16px;margin-top:10px}
+  .dwmsg.err{color:var(--bad)} .dwmsg.ok{color:var(--ok)}
 </style>
 </head>
 <body>
@@ -218,6 +256,7 @@
   <span class="ver" id="ver"></span>
   <span class="meta" id="meta">avvio…</span>
   <span class="who" id="who"></span>
+  <button class="gear" id="usersBtn" style="display:none">👥 Utenti</button>
   <button class="gear" id="gear">⚙ Config</button>
   <button class="gear" id="logout">Esci</button>
 </header>
@@ -238,14 +277,27 @@
     <div class="presets" id="presets"></div>
   </div>
 
-  <!-- strip rete -->
-  <div class="panel">
-    <div class="panel-head">
-      <h3>Rete — throughput per server</h3>
-      <div class="toggles" id="netTg"></div>
-      <div class="legend" id="netLeg"></div>
+  <!-- rete + sicurezza affiancate (metà larghezza ciascuna) -->
+  <div class="panel-row">
+    <!-- strip rete -->
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Rete — throughput per server</h3>
+        <div class="toggles" id="netTg"></div>
+        <div class="legend" id="netLeg"></div>
+      </div>
+      <div class="chart" id="netChart"><div class="tip" id="netTip"></div></div>
     </div>
-    <div class="chart" id="netChart"><div class="tip" id="netTip"></div></div>
+
+    <!-- strip sicurezza -->
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Sicurezza — attività per server</h3>
+        <div class="toggles" id="secTg"></div>
+        <div class="legend" id="secLeg"></div>
+      </div>
+      <div class="chart" id="secChart"><div class="tip" id="secTip"></div></div>
+    </div>
   </div>
 
   <!-- flussi di rete (chi comunica con chi, su quali porte) -->
@@ -258,16 +310,6 @@
       </div>
     </div>
     <div class="snk" id="flowSnk"></div>
-  </div>
-
-  <!-- strip sicurezza -->
-  <div class="panel">
-    <div class="panel-head">
-      <h3>Sicurezza — attività per server</h3>
-      <div class="toggles" id="secTg"></div>
-      <div class="legend" id="secLeg"></div>
-    </div>
-    <div class="chart" id="secChart"><div class="tip" id="secTip"></div></div>
   </div>
 
   <!-- docker per server -->
@@ -292,16 +334,29 @@
       <button id="cfgAdd" style="background:#30363d;border-color:#484f58" title="aggiungi soltanto: dovrai installare la sonda manualmente">Aggiungi (manuale)</button>
     </div>
     <div class="msg" id="cfgMsg"></div>
-    <div id="cfgUsersWrap" style="display:none">
-      <div class="seccap">Gestione utenti</div>
-      <div id="cfgUsers"></div>
-    </div>
     <details class="setup">
       <summary>Installazione manuale della sonda (chiave + comando forzato)</summary>
       <div id="cfgSetup"></div>
     </details>
   </div>
 </div>
+
+<!-- drawer gestione utenti (solo admin) -->
+<div class="drawer-ovl" id="usrOvl"></div>
+<aside class="drawer" id="usrDrawer" aria-hidden="true">
+  <div class="dwh">👥 <b>Gestione utenti</b><span class="x" id="usrX">✕</span></div>
+  <div class="dwbody">
+    <div id="usrList"></div>
+    <div class="dwsec">Crea nuovo utente</div>
+    <div class="newuser">
+      <input id="nuName" placeholder="username (3-32: lettere, cifre, . _ -)" autocomplete="off">
+      <input id="nuPass" type="password" placeholder="password (min 8 caratteri)" autocomplete="new-password">
+      <select id="nuRole"><option value="user">utente</option><option value="admin">amministratore</option></select>
+      <button id="nuCreate">Crea utente</button>
+    </div>
+    <div class="dwmsg" id="usrMsg"></div>
+  </div>
+</aside>
 
 <script>
 // ------------------------------------------------------------ util
@@ -776,7 +831,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-flowhost],[data-flowdir]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -794,9 +849,12 @@ document.addEventListener("click", e=>{
   else if(t.dataset.add){ openConfig(); }
   else if(t.dataset.del){ removeHost(t.dataset.del); }
   else if(t.dataset.uappr){ userAction(t.dataset.uappr, "approve"); }
-  else if(t.dataset.urej){ userAction(t.dataset.urej, "reject"); }
+  else if(t.dataset.urej){ if(confirm("Rifiutare la richiesta di "+t.dataset.urej+"?")) userAction(t.dataset.urej, "reject"); }
   else if(t.dataset.udel){ if(confirm("Eliminare l'utente "+t.dataset.udel+"?")) userAction(t.dataset.udel, "delete"); }
   else if(t.dataset.urole){ userAction(t.dataset.urole, "role", {role:t.dataset.role}); }
+  else if(t.dataset.upw){ pwFor = pwFor===t.dataset.upw ? null : t.dataset.upw; usrMsg(""); loadUsersDrawer(); }
+  else if(t.dataset.upwsave){ submitPw(t.dataset.upwsave); }
+  else if(t.dataset.upwcancel){ pwFor=null; loadUsersDrawer(); }
   else if(t.dataset.flowhost){ flowHost=t.dataset.flowhost; renderFlow(); }
   else if(t.dataset.flowdir){ const k=t.dataset.flowdir;
     if(flowDirs.includes(k)){ if(flowDirs.length>1) flowDirs=flowDirs.filter(x=>x!==k); }  // resta ≥1
@@ -822,48 +880,97 @@ async function loadCfg(){
       || `<div class="empty">nessun server</div>`;
   }catch(e){ document.getElementById("cfgList").innerHTML=`<div class="err">errore nel caricamento</div>`; }
   loadSetup();
-  loadUsers();
 }
-async function loadUsers(){
-  const wrap=document.getElementById("cfgUsersWrap");
-  if(!ME || ME.role!=="admin"){ wrap.style.display="none"; return; }
+
+// ------------------------------------------------------------ gestione utenti (drawer, solo admin)
+let pwFor = null;   // username in modalità reset-password (editor inline)
+function usrMsg(text, ok){ const m=document.getElementById("usrMsg");
+  m.className="dwmsg"+(text?(ok?" ok":" err"):""); m.textContent=text||""; }
+
+function openUsers(){
+  if(!ME || ME.role!=="admin") return;
+  document.getElementById("usrOvl").classList.add("on");
+  document.getElementById("usrDrawer").classList.add("on");
+  usrMsg(""); loadUsersDrawer();
+}
+function closeUsers(){
+  document.getElementById("usrOvl").classList.remove("on");
+  document.getElementById("usrDrawer").classList.remove("on");
+  pwFor=null;
+}
+
+async function loadUsersDrawer(){
   try{
     const r=await fetch("/api/users");
-    if(!r.ok){ wrap.style.display="none"; return; }
+    if(!r.ok){ usrMsg("impossibile caricare gli utenti"); return; }
     const j=await r.json();
-    wrap.style.display="block";
-    document.getElementById("cfgUsers").innerHTML = (j.users||[]).map(u=>{
-      const e=escapeHtml(u.name), pending=u.status==="pending", isAdmin=u.role==="admin";
-      const me=ME && u.name===ME.name;
-      let acts;
-      if(pending){
-        acts=`<button class="ap" data-uappr="${e}">approva</button>`+
-             `<button class="rj" data-urej="${e}">rifiuta</button>`;
-      }else{
-        const role=isAdmin
-          ? `<button class="pr" data-urole="${e}" data-role="user">rendi utente</button>`
-          : `<button class="pr" data-urole="${e}" data-role="admin">rendi admin</button>`;
-        const del=me ? `<span class="me">(tu)</span>` : `<button class="dl" data-udel="${e}">elimina</button>`;
-        acts=role+del;
-      }
-      const bc=pending?'pending':(isAdmin?'admin':''), bt=pending?'in attesa':(isAdmin?'admin':'attivo');
-      return `<div class="usr"><span class="un">${e}</span>
-        <span class="badge ${bc}">${bt}</span>
-        <div class="acts">${acts}</div></div>`;
-    }).join("") || `<div class="empty">nessun utente</div>`;
-  }catch(e){ wrap.style.display="none"; }
+    renderUsersDrawer(j.users||[]);
+  }catch(e){ usrMsg("errore di rete"); }
 }
+
+function renderUsersDrawer(users){
+  const pend=users.filter(u=>u.status==="pending");
+  const act =users.filter(u=>u.status!=="pending");
+  const prow=u=>{ const e=escapeHtml(u.name);
+    return `<div class="usr"><span class="un">${e}</span><span class="badge pending">in attesa</span>
+      <div class="acts"><button class="ap" data-uappr="${e}">approva</button>
+      <button class="rj" data-urej="${e}">rifiuta</button></div></div>`; };
+  const arow=u=>{ const e=escapeHtml(u.name), isAdmin=u.role==="admin", me=ME&&u.name===ME.name;
+    const role=isAdmin
+      ? `<button class="pr" data-urole="${e}" data-role="user">rendi utente</button>`
+      : `<button class="pr" data-urole="${e}" data-role="admin">rendi admin</button>`;
+    const pw=`<button class="pw" data-upw="${e}">password</button>`;
+    const del=me ? `<span class="me">(tu)</span>` : `<button class="dl" data-udel="${e}">elimina</button>`;
+    let ed="";
+    if(pwFor===u.name){
+      ed=`<div class="pwedit"><input id="pwInput" type="password" placeholder="nuova password (min 8)" autocomplete="new-password">
+        <button data-upwsave="${e}">salva</button><button data-upwcancel="1">annulla</button></div>`;
+    }
+    return `<div class="usr"><span class="un">${e}</span>
+      <span class="badge ${isAdmin?'admin':''}">${isAdmin?'admin':'attivo'}</span>
+      <div class="acts">${role}${pw}${del}</div></div>${ed}`; };
+  let html="";
+  if(pend.length) html+=`<div class="dwsec first">In attesa di approvazione</div>`+pend.map(prow).join("");
+  html+=`<div class="dwsec${pend.length?'':' first'}">Utenti attivi</div>`
+      +(act.map(arow).join("")||`<div class="empty">nessun utente attivo</div>`);
+  document.getElementById("usrList").innerHTML=html;
+  if(pwFor){ const i=document.getElementById("pwInput");
+    if(i){ i.focus(); i.addEventListener("keydown",ev=>{ if(ev.key==="Enter") submitPw(pwFor); }); } }
+}
+
+function submitPw(username){
+  const v=(document.getElementById("pwInput")||{}).value||"";
+  if(v.length<8){ usrMsg("la password deve avere almeno 8 caratteri"); return; }
+  userAction(username, "password", {password:v});
+}
+
+async function createUser(){
+  const name=document.getElementById("nuName").value.trim();
+  const password=document.getElementById("nuPass").value;
+  const role=document.getElementById("nuRole").value;
+  if(!name || !password){ usrMsg("inserisci username e password"); return; }
+  try{
+    const r=await fetch("/api/users/create",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username:name,password,role})});
+    const j=await r.json();
+    if(!r.ok){ usrMsg(j.error||"errore"); return; }
+    usrMsg("creato: "+name, true);
+    document.getElementById("nuName").value=""; document.getElementById("nuPass").value="";
+    loadUsersDrawer();
+  }catch(e){ usrMsg("errore di rete"); }
+}
+
 async function userAction(username, action, extra){
-  const msg=document.getElementById("cfgMsg");
   try{
     const r=await fetch("/api/users/"+action,{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify(Object.assign({username}, extra||{}))});
     const j=await r.json();
-    if(!r.ok){ msg.className="msg err"; msg.textContent=j.error||"errore"; return; }
-    const verb={approve:"approvato",reject:"rimosso",delete:"eliminato",role:"ruolo aggiornato per"}[action]||"aggiornato";
-    msg.className="msg ok"; msg.textContent=verb+": "+username;
-    loadUsers();
-  }catch(e){ msg.className="msg err"; msg.textContent="errore di rete"; }
+    if(!r.ok){ usrMsg(j.error||"errore"); return; }
+    const verb={approve:"approvato",reject:"rifiutato",delete:"eliminato",
+                role:"ruolo aggiornato",password:"password aggiornata"}[action]||"aggiornato";
+    usrMsg(verb+": "+username, true);
+    pwFor=null; loadUsersDrawer();
+  }catch(e){ usrMsg("errore di rete"); }
 }
 async function loadSetup(){
   try{
@@ -929,6 +1036,11 @@ ovl.onclick=(e)=>{ if(e.target===ovl) closeConfig(); };
 document.getElementById("cfgAdd").onclick=addHost;
 document.getElementById("cfgEnroll").onclick=enrollHost;
 document.getElementById("logout").onclick=doLogout;
+document.getElementById("usersBtn").onclick=openUsers;
+document.getElementById("usrX").onclick=closeUsers;
+document.getElementById("usrOvl").onclick=closeUsers;
+document.getElementById("nuCreate").onclick=createUser;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeUsers(); closeConfig(); } });
 
 async function loadMe(){
   try{
@@ -937,6 +1049,7 @@ async function loadMe(){
     ME=await r.json();
     document.getElementById("who").innerHTML =
       `<b>${escapeHtml(ME.name||"")}</b>${ME.role==="admin"?' <span class="rl">admin</span>':''}`;
+    document.getElementById("usersBtn").style.display = ME.role==="admin" ? "" : "none";
     if(ME.version){
       document.getElementById("ver").innerHTML =
         `<b>${escapeHtml(ME.version)}</b> · ${escapeHtml(ME.build||"")}<br><span class="au">${escapeHtml(ME.author||"")}</span>`;
