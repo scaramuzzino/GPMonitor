@@ -399,10 +399,14 @@
   .dockbtn.red  {--rag:#f85149} .dockbtn.amber{--rag:#e3b341}
   .dockbtn.green{--rag:#3fb950} .dockbtn.grey {--rag:#6e7681}
   /* ---- dashboard Docker (modale grande e centrale, stile Grafana) ---- */
-  .modal.dockdash{width:94vw;max-width:1180px;max-height:88vh;margin-top:5vh;padding:0;
-    display:flex;flex-direction:column;overflow:hidden}
-  .modal.dockdash .mhead{padding:14px 18px;margin:0;border-bottom:1px solid var(--line);gap:10px}
+  .modal.dockdash{position:relative;width:94vw;max-width:96vw;height:86vh;max-height:94vh;min-width:520px;min-height:360px;
+    margin-top:4vh;padding:0;display:flex;flex-direction:column;overflow:hidden;resize:both}
+  .modal.dockdash::after{content:"";position:absolute;right:2px;bottom:2px;width:14px;height:14px;pointer-events:none;
+    background:linear-gradient(135deg,transparent 42%,var(--mut) 42% 52%,transparent 52% 66%,var(--mut) 66% 76%,transparent 76%)}
+  .modal.dockdash .mhead{padding:14px 18px;margin:0;border-bottom:1px solid var(--line);gap:10px;flex-shrink:0}
   .modal.dockdash .mhead b{display:flex;align-items:center;gap:9px}
+  .livedot{font-size:11px;color:var(--ok);font-weight:600;letter-spacing:.02em;animation:lblink 1.4s ease-in-out infinite}
+  @keyframes lblink{0%,100%{opacity:1}50%{opacity:.32}}
   .modal.dockdash .mhead b svg{width:26px;height:18px}
   .modal.dockdash .dsub{color:var(--mut);font-size:12px;font-family:ui-monospace,Menlo,monospace}
   .dockbody{padding:16px 18px 22px;overflow:auto}
@@ -1098,6 +1102,9 @@ function sortConts(list){
 // ------------------------------------------------------------ dashboard Docker (modale grande, stile Grafana)
 let dockHost = null;     // host della dashboard Docker aperta
 let DOCK_HIST = [];      // storico righe (ts,dock_cpu,dock_mem,cont_running,cont_total) dell'host aperto
+let dockTimer = null;    // timer di aggiornamento live mentre la modale è aperta
+let dockRO = null;       // ResizeObserver: ridisegna i grafici quando la modale cambia larghezza
+let dockW = 0;           // ultima larghezza nota della modale (per il tracking del resize)
 
 // sparkline compatta (mini grafico a linea) per le stat-tile
 function sparkSvg(pts, col){
@@ -1121,12 +1128,25 @@ function dtile(val, lbl, col, spark){
 async function openDock(name){
   dockHost=name;
   document.getElementById("dockOvl").classList.add("on");
-  document.getElementById("dockTitle").innerHTML = `${WHALE}<span>Docker — ${escapeHtml(name)}</span>`;
+  document.getElementById("dockTitle").innerHTML =
+    `${WHALE}<span>Docker — ${escapeHtml(name)}</span><span class="livedot" title="aggiornamento automatico ogni 5s">● live</span>`;
   document.getElementById("dockBody").innerHTML = `<div class="dload">Caricamento storico…</div>`;
   await loadDockHist();
   renderDockerDash();
+  // live: ricarico storico + ridisegno periodicamente finché la modale è aperta
+  clearInterval(dockTimer);
+  dockTimer=setInterval(async()=>{ if(!dockHost) return; await loadDockHist(); renderDockerDash(); }, 5000);
+  // resize della modale → ridisegno i grafici SVG alla nuova larghezza (solo se cambia la larghezza)
+  const modal=document.querySelector("#dockOvl .modal.dockdash");
+  dockW=Math.round(modal.getBoundingClientRect().width);
+  if(dockRO) dockRO.disconnect();
+  dockRO=new ResizeObserver(es=>{ const w=Math.round(es[0].contentRect.width);
+    if(w!==dockW){ dockW=w; clearTimeout(dockRO._t); dockRO._t=setTimeout(()=>{ if(dockHost) renderDockerDash(); }, 160); } });
+  dockRO.observe(modal);
 }
-function closeDock(){ dockHost=null; document.getElementById("dockOvl").classList.remove("on"); }
+function closeDock(){ dockHost=null; document.getElementById("dockOvl").classList.remove("on");
+  clearInterval(dockTimer); dockTimer=null;
+  if(dockRO){ dockRO.disconnect(); dockRO=null; } }
 async function loadDockHist(){
   if(!dockHost){ DOCK_HIST=[]; return; }
   try{ DOCK_HIST = await (await fetch("/api/history?host="+encodeURIComponent(dockHost)+"&minutes="+winMin,
@@ -1261,7 +1281,9 @@ function renderDockerDash(){
       <th class="num" data-csort="mem">MEM${arr('mem')}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
+  const _sc=body.scrollTop;   // preservo lo scroll durante il refresh live
   body.innerHTML = overview + charts + carico + conns + bars + table;
+  body.scrollTop=_sc;
 
   // disegno grafici/heatmap dopo l'inserimento dell'HTML
   const pctFmt=v=>v==null?"—":v.toFixed(0)+"%", numFmt=v=>v==null?"—":v.toFixed(0);
