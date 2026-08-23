@@ -31,9 +31,9 @@ auto-ban degli scanner.
   `monitor-probe-macos.py` per macOS), scelta in base al sistema. Mai un agente compilato.
 - **On-premise / stdlib**: nessuna dipendenza esterna, nessun traffico verso il cloud
   (unica eccezione opzionale e disattivabile: la correlazione CVE via `vulners`, vedi sotto).
-- **Dashboard web** (SVG vanilla): card per host (RAM/disco), strip Rete e Sicurezza con grafici
-  temporali multi-linea, Sankey dei flussi di rete, dashboard Docker per server in stile Grafana,
-  KPI di sicurezza RAG, drawer di scansione nmap con CVE e remediation.
+- **Dashboard web** (SVG vanilla): card per host (RAM/disco, **throughput di rete realtime**),
+  Security Activity Dashboard con SAI e timeline, Sankey dei flussi di rete, dashboard Docker
+  per server in stile Grafana, KPI di sicurezza RAG, drawer di scansione nmap con CVE e remediation.
 - **Security Activity Dashboard**: SAI (Security Activity Index 0–100), stati NORMAL/ELEVATED/
   ACTIVE_ATTACK/UNKNOWN con hysteresis, timeline SAI per server, Security Changes feed
   deduplicato, correlazione listening vs nmap reachable, drawer di drill-down. Tutto
@@ -138,13 +138,8 @@ Storage SQLite (`data/metrics.db`):
 ├──────────────────────────────────────────────────────────────────────────┤
 │  [card srv1]  [card srv2]  [card srv3]  [card srv4]  [+]                 │
 │  RAM/disco     RAM/disco    RAM/disco    RAM/disco    aggiungi           │
+│  Rete ↓↑ RX    Rete ↓↑ RX   Rete ↓↑ RX   Rete ↓↑ RX                     │
 │  ● ok          ● ok         ⚠ warn       ● ok                            │
-├──────────────────────────────────────────────────────────────────────────┤
-│  Rete — throughput    │  Sicurezza — attività per server                 │
-│  [strip multilinea]   │  [strip multilinea fw/ssh]                       │
-├──────────────────────────────────────────────────────────────────────────┤
-│  Flussi di rete — chi comunica con chi                                  │
-│  [Sankey: server → IP:porta → servizio]                                 │
 ├──────────────────────────────────────────────────────────────────────────┤
 │  Sicurezza — Security Activity Dashboard                       REALTIME ●│
 │                                                                          │
@@ -168,6 +163,9 @@ Storage SQLite (`data/metrics.db`):
 │  │16:31  proxy01    NEW OUT PEER      10.23.7.18:443        medium    │   │
 │  │16:22  web02      FAIL2BAN          banned 8              medium    │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Flussi di rete — chi comunica con chi                                  │
+│  [Sankey: server → IP:porta → servizio]                                 │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
