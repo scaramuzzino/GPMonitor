@@ -11,16 +11,26 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
 import sqlite3
+import statistics
 import subprocess
 import threading
 import time
 import xml.etree.ElementTree as ET
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
+# Security Activity Index engine (funzioni pure, testabili senza DB/SSH)
+from sai_engine import (
+    SAI_WEIGHTS, SECURITY_THRESHOLDS, SAI_HYSTERESIS, SENSITIVE_PORTS,
+    safe_rate as _safe_rate, baseline_values as _baseline_values,
+    normalized_ratio as _normalized_ratio, sai_score as _sai_score_impl,
+    classify_state as _classify_state_impl,
+)
 
 # ---------------------------------------------------------------- versione
 VERSION = "v3.0"
@@ -57,6 +67,9 @@ NMAP_DEEP = os.environ.get("MON_NMAP_DEEP", "0") not in ("0", "false", "no", "")
 NMAP_VULN = os.environ.get("MON_NMAP_VULN", "0") not in ("0", "false", "no", "")
 # tetto CVE per porta (0 = nessun tetto -> conteggi onesti; >0 = limita per payload)
 NMAP_VULN_CAP = int(os.environ.get("MON_NMAP_VULN_CAP", "0"))
+# --- Security Activity Dashboard (SAI) ---
+# Retention degli eventi security (coerente con le metriche). Configurabile.
+SECURITY_RETENTION_H = int(os.environ.get("MON_SECURITY_RETENTION_HOURS", "48"))
 DB_PATH = os.path.join(DATA_DIR, "metrics.db")
 KNOWN_HOSTS = os.path.join(DATA_DIR, "known_hosts")
 HOSTS_FILE = os.path.join(DATA_DIR, "hosts.json")
@@ -88,6 +101,33 @@ _prev = {}     # name -> (ts, {counters}) per il calcolo dei rate
 HOSTS = []     # [(name, target)] — lista viva, modificabile a caldo dalla config
 _scan_lock = threading.Lock()
 _scans_running = set()   # nomi host con una scansione nmap in corso
+
+# ---------------------------------------------------------------- Security Activity Index (SAI)
+# SAI = Security Activity Index: intensita' (0-100) dell'attivita' di sicurezza
+# anomala osservata sull'host nel periodo corrente. NON e' probabilita' di
+# compromissione, NON e' risk score, NON e' CVSS severity. Rappresenta solo
+# quanto l'attivita' osservata si discosta dalla baseline dell'host.
+# Costanti e funzioni pure in sai_engine.py (importato sopra) per test isolati.
+# Deduplicazione eventi: cooldown per non generare un evento ogni 15s durante
+# lo stesso attacco. Tipo evento -> secondi di cooldown.
+EVENT_COOLDOWN_S = {
+    "firewall_spike": 300,
+    "ssh_failed_spike": 300,
+    "ssh_invalid_spike": 300,
+    "fail2ban_ban": 300,
+    "new_listen_port": 3600,       # una volta per porta
+    "removed_listen_port": 3600,
+    "new_inbound_peer": 3600,
+    "new_outbound_peer": 3600,
+    "connection_spike": 300,
+    "scan_exposure_change": 3600,
+    "cve_change": 3600,
+    "host_security_unknown": 900,
+}
+# Stato security per-host in memoria (non persistito: ricalcolato a caldo).
+# _sec_state[host] = {"state": str, "sai": int, "below_count": int, "last_event_ts": {type: ts}}
+_sec_state = {}
+_sec_lock = threading.Lock()
 
 
 def save_hosts():
@@ -361,6 +401,18 @@ def init_db():
         for col in ("dock_cpu", "dock_mem"):
             if col not in have:
                 c.execute("ALTER TABLE metrics ADD COLUMN %s REAL" % col)
+        # migrazione: colonne security estese per la Security Activity Dashboard.
+        # ssh_invalid_1h, f2b_total_failed, in_peers, out_peers, listening_count
+        # non erano persistiti (restavano solo in _latest in memoria). Ora li
+        # salviamo per calcolare baseline e delta lato collector.
+        for col, decl in (("ssh_invalid_1h", "INTEGER"),
+                          ("f2b_total_failed", "INTEGER"),
+                          ("in_peers", "INTEGER"),
+                          ("out_peers", "INTEGER"),
+                          ("listening_count", "INTEGER"),
+                          ("sai", "INTEGER")):
+            if col not in have:
+                c.execute("ALTER TABLE metrics ADD COLUMN %s %s" % (col, decl))
         # persistenza consolidata in SQLite (prima erano hosts.json / users.json)
         c.execute("""
             CREATE TABLE IF NOT EXISTS hosts (
@@ -386,6 +438,47 @@ def init_db():
                 duration REAL,
                 status TEXT,
                 json TEXT
+            )
+        """)
+        # --- Security Activity Dashboard: tabelle derivate ---
+        # Eventi security deduplicati (timeline "Security Changes").
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS security_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts INTEGER NOT NULL,
+                host TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                value REAL,
+                baseline REAL,
+                details_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_security_events_host_ts ON security_events(host, ts)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_security_events_ts ON security_events(ts)")
+        # Peer di rete osservati per host (per rilevare new/rare peer).
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS security_peers (
+                host TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                ip TEXT NOT NULL,
+                port INTEGER,
+                first_seen INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL,
+                max_connections INTEGER DEFAULT 0,
+                PRIMARY KEY(host, direction, ip, port)
+            )
+        """)
+        # Porte in ascolto osservate per host (per rilevare new/removed port).
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS security_ports (
+                host TEXT NOT NULL,
+                proto TEXT NOT NULL,
+                addr TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                first_seen INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL,
+                PRIMARY KEY(host, proto, addr, port)
             )
         """)
 
@@ -453,22 +546,30 @@ def persist(name, data):
         cpus = data.get("cpus")
         dock_cpu = (cpu_sum / cpus) if cpus else cpu_sum
         dock_mem = sum((c.get("mem_pct") or 0) for c in conts)
+    # security estesa: peers e porte in ascolto (conteggi per lo storico SAI)
+    flows = data.get("flows") or {}
+    listening = sec.get("listening") or []
     r = data["rates"]
     with db() as c:
         c.execute(
             "INSERT INTO metrics (host,ts,mem_used,mem_total,disk_pct,net_rx_rate,"
             "net_tx_rate,fw_drop_rate,estab,ssh_failed_1h,f2b_banned,cont_running,cont_total,"
-            "dock_cpu,dock_mem) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "dock_cpu,dock_mem,ssh_invalid_1h,f2b_total_failed,in_peers,out_peers,listening_count) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (name, data["ts"], data["ram"]["used"], data["ram"]["total"],
              (root["use_pct"] if root else None),
              r["net_rx_rate"], r["net_tx_rate"], r["fw_drop_rate"],
              (data.get("conns") or {}).get("estab"),
              sec.get("ssh_failed_1h"), sec.get("f2b_banned"),
-             running, total, dock_cpu, dock_mem),
+             running, total, dock_cpu, dock_mem,
+             sec.get("ssh_invalid_1h"), sec.get("f2b_total_failed"),
+             flows.get("in_peers"), flows.get("out_peers"), len(listening)),
         )
         cutoff = int(time.time()) - RETENTION_H * 3600
         c.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
+        # retention eventi security (coerente con metriche)
+        sec_cutoff = int(time.time()) - SECURITY_RETENTION_H * 3600
+        c.execute("DELETE FROM security_events WHERE ts < ?", (sec_cutoff,))
 
 
 def _poll_host(name, target):
@@ -478,9 +579,272 @@ def _poll_host(name, target):
         with _lock:
             _latest[name] = data
         persist(name, data)
+        security_analyze(name, data)   # Security Activity Dashboard (collector-side)
     except Exception as e:
         with _lock:
             _latest[name] = {"name": name, "error": str(e), "ts": int(time.time())}
+
+
+# ---------------------------------------------------------------- Security Activity Index (SAI) engine
+# Tutto collector-side: la sonda resta read-only e invariata. Qui deriviamo
+# delta/rate, baseline, SAI, stato e eventi dalle metriche gia' persistite.
+# Le funzioni pure (safe_rate, baseline_values, normalized_ratio, sai_score,
+# classify_state) sono in sai_engine.py e importate sopra per test isolati.
+
+
+def _sai_components(host, data, rows):
+    """Calcola ogni componente SAI in 0..100. Usa la baseline 1h (piu' reattiva)
+    come riferimento principale, con fallback alle soglie assolute se la
+    baseline non e' disponibile (host nuovo o pochi campioni)."""
+    sec = data.get("security") or {}
+    flows = data.get("flows") or {}
+    r = data.get("rates") or {}
+    now = int(time.time())
+    # baseline 1h per le metriche cumulativo-derivate
+    bl_fw = _baseline_values(rows, "fw_drop_rate").get(3600, {})
+    bl_sshf = _baseline_values(rows, "ssh_failed_1h").get(3600, {})
+    bl_sshi = _baseline_values(rows, "ssh_invalid_1h").get(3600, {})
+    bl_f2b = _baseline_values(rows, "f2b_banned").get(3600, {})
+    # --- firewall: rate pkt/min vs baseline ---
+    fw_rate = r.get("fw_drop_rate")
+    fw_comp = _normalized_ratio(fw_rate, bl_fw.get("median"))
+    # --- ssh failed /h ---
+    sshf = sec.get("ssh_failed_1h")
+    sshf_comp = _normalized_ratio(sshf, bl_sshf.get("median"))
+    # --- ssh invalid /h (segnale piu' forte: scanning/brute) ---
+    sshi = sec.get("ssh_invalid_1h")
+    sshi_comp = _normalized_ratio(sshi, bl_sshi.get("median"))
+    # --- fail2ban: delta banned vs baseline ---
+    f2b = sec.get("f2b_banned")
+    f2b_comp = _normalized_ratio(f2b, bl_f2b.get("median"))
+    # --- new ports: conteggio porte nuove nelle ultime 24h ---
+    new_ports = _count_new_ports(host, now - 86400)
+    port_comp = min(100, new_ports * SECURITY_THRESHOLDS["new_port_score"])
+    # --- network peer anomaly: peer nuovi/rari nelle ultime 6h ---
+    peer_anom = _count_new_peers(host, now - 21600)
+    peer_comp = min(100, peer_anom * SECURITY_THRESHOLDS["peer_anomaly_score"])
+    return {
+        "firewall": fw_comp,
+        "ssh_failed": sshf_comp,
+        "ssh_invalid": sshi_comp,
+        "fail2ban": f2b_comp,
+        "new_ports": port_comp,
+        "network_peer": peer_comp,
+        # contesto grezzo per API e drawer
+        "_raw": {
+            "fw_rate": fw_rate, "ssh_failed_1h": sshf, "ssh_invalid_1h": sshi,
+            "f2b_banned": f2b, "new_ports": new_ports, "peer_anomaly": peer_anom,
+            "bl_fw": bl_fw.get("median"), "bl_sshf": bl_sshf.get("median"),
+            "bl_sshi": bl_sshi.get("median"), "bl_f2b": bl_f2b.get("median"),
+        },
+        "_available": {
+            "firewall": fw_rate is not None,
+            "ssh_failed": sshf is not None,
+            "ssh_invalid": sshi is not None,
+            "fail2ban": f2b is not None,
+            "new_ports": True,
+            "network_peer": True,
+        },
+    }
+
+
+def _sai_score(components):
+    """Wrapper per sai_engine.sai_score (vedi sai_engine.py per i test)."""
+    return _sai_score_impl(components)
+
+
+def _classify_state(host, sai, components, raw):
+    """Classifica lo stato con hysteresis per evitare oscillazioni ogni 15s.
+    Delega la logica pura a sai_engine.classify_state; qui gestisce solo lo
+    stato in-memory per-host (protetto da _sec_lock). ACTIVE ATTACK richiede
+    SAI alto AND almeno una rule composita (non basta il SAI da solo). Mai
+    usare COMPROMISED/INFECTED/BREACHED: GPMonitor non ha le evidenze."""
+    with _sec_lock:
+        st = _sec_state.setdefault(host, {"state": "unknown", "sai": 0,
+                                          "below_count": 0, "last_event_ts": {}})
+        return _classify_state_impl(st["state"], sai, raw, st)
+
+
+def _count_new_ports(host, since):
+    """Porte in ascolto apparse dopo `since` (first_seen >= since)."""
+    with db() as c:
+        return c.execute(
+            "SELECT COUNT(*) AS n FROM security_ports WHERE host=? AND first_seen>=?",
+            (host, since)).fetchone()["n"]
+
+
+def _count_new_peers(host, since):
+    """Peer di rete apparsi dopo `since` (first_seen >= since)."""
+    with db() as c:
+        return c.execute(
+            "SELECT COUNT(*) AS n FROM security_peers WHERE host=? AND first_seen>=?",
+            (host, since)).fetchone()["n"]
+
+
+def _emit_event(host, event_type, severity, value=None, baseline=None, details=None):
+    """Inserisce un evento security con deduplicazione via cooldown. Se esiste
+    gia' un evento dello stesso tipo per l'host entro il cooldown, non ne
+    creiamo un altro (evita un evento ogni 15s durante lo stesso attacco)."""
+    now = int(time.time())
+    cd = EVENT_COOLDOWN_S.get(event_type, 300)
+    with db() as c:
+        last = c.execute(
+            "SELECT ts FROM security_events WHERE host=? AND event_type=? "
+            "ORDER BY ts DESC LIMIT 1", (host, event_type)).fetchone()
+        if last and (now - last["ts"]) < cd:
+            return False  # deduplicato: dentro cooldown
+        c.execute(
+            "INSERT INTO security_events (ts, host, event_type, severity, value, "
+            "baseline, details_json) VALUES (?,?,?,?,?,?,?)",
+            (now, host, event_type, severity, value, baseline,
+             json.dumps(details or {})))
+        return True
+
+
+def _detect_port_changes(host, listening, now):
+    """Rileva new/removed listen port confrontando con lo storico security_ports.
+    Aggiorna first_seen/last_seen. Una porta e' 'nuova' se first_seen e' adesso
+    (non era mai stata osservata). Una porta 'rimossa' se non e' nel campione
+    corrente ma era nello storico con last_seen recente."""
+    current = set()
+    for p in (listening or []):
+        proto = p.get("proto") or ""
+        addr = p.get("addr") or ""
+        port = int(p.get("port") or 0)
+        if port <= 0:
+            continue
+        current.add((proto, addr, port))
+    with db() as c:
+        known = {row["key"] for row in c.execute(
+            "SELECT proto||'|'||addr||'|'||port AS key FROM security_ports WHERE host=?",
+            (host,))}
+        # nuove porte
+        for proto, addr, port in current - known:
+            c.execute(
+                "INSERT INTO security_ports (host,proto,addr,port,first_seen,last_seen) "
+                "VALUES (?,?,?,?,?,?)", (host, proto, addr, port, now, now))
+            sev = "high" if port in SENSITIVE_PORTS else "medium"
+            _emit_event(host, "new_listen_port", sev,
+                        value=port, details={"proto": proto, "addr": addr, "port": port,
+                                             "sensitive": port in SENSITIVE_PORTS})
+        # porte confermate (update last_seen)
+        for proto, addr, port in current & known:
+            c.execute(
+                "UPDATE security_ports SET last_seen=? WHERE host=? AND proto=? AND addr=? AND port=?",
+                (now, host, proto, addr, port))
+        # porte rimosse (presenti nello storico, non nel campione, last_seen recente)
+        for proto, addr, port in known - current:
+            c.execute(
+                "UPDATE security_ports SET last_seen=? WHERE host=? AND proto=? AND addr=? AND port=?",
+                (now - 1, host, proto, addr, port))
+
+
+def _detect_peer_anomalies(host, flows, now):
+    """Rileva new inbound/outbound peer aggiornando security_peers. Un peer e'
+    'nuovo' se non era mai stato osservato (first_seen = now). Non dichiariamo
+    il peer malicious: usiamo terminologia 'new'/'rare' (salvo evidenza esterna)."""
+    for direction in ("in", "out"):
+        for peer in (flows or {}).get(direction, []):
+            ip = peer.get("ip")
+            port = int(peer.get("port") or 0)
+            n = int(peer.get("n") or 0)
+            if not ip or port <= 0:
+                continue
+            with db() as c:
+                row = c.execute(
+                    "SELECT first_seen, last_seen, max_connections FROM security_peers "
+                    "WHERE host=? AND direction=? AND ip=? AND port=?",
+                    (host, direction, ip, port)).fetchone()
+                if row is None:
+                    c.execute(
+                        "INSERT INTO security_peers (host,direction,ip,port,first_seen,"
+                        "last_seen,max_connections) VALUES (?,?,?,?,?,?,?)",
+                        (host, direction, ip, port, now, now, n))
+                    _emit_event(host, "new_%bound_peer" % direction, "medium",
+                                details={"ip": ip, "port": port, "direction": direction,
+                                         "n": n})
+                else:
+                    c.execute(
+                        "UPDATE security_peers SET last_seen=?, max_connections=? "
+                        "WHERE host=? AND direction=? AND ip=? AND port=?",
+                        (now, max(row["max_connections"], n), host, direction, ip, port))
+
+
+def _detect_spikes(host, data, rows, raw, bl):
+    """Rileva spike rispetto alla baseline per firewall/ssh/fail2ban. Usa
+    baseline relativa (current > baseline * multiplier) con un minimo assoluto
+    per non scatenare spike su baseline 0 con rumore minimo."""
+    th = SECURITY_THRESHOLDS
+    now = int(time.time())
+    # firewall spike
+    fw = raw["fw_rate"]
+    if fw is not None and fw >= th["spike_min_absolute"]:
+        b = bl.get("bl_fw")
+        if b is not None and fw > b * th["spike_multiplier"]:
+            _emit_event(host, "firewall_spike", "high", value=fw, baseline=b,
+                        details={"rate_per_min": fw, "baseline": b})
+        elif b is None and fw >= th["firewall_rate_high"]:
+            _emit_event(host, "firewall_spike", "high", value=fw, baseline=None,
+                        details={"rate_per_min": fw, "baseline": "n/a (host nuovo)"})
+    # ssh failed spike
+    sshf = raw["ssh_failed_1h"]
+    if sshf is not None and sshf >= th["spike_min_absolute"]:
+        b = bl.get("bl_sshf")
+        if b is not None and sshf > b * th["spike_multiplier"]:
+            _emit_event(host, "ssh_failed_spike", "high", value=sshf, baseline=b)
+        elif b is None and sshf >= th["ssh_failed_high"]:
+            _emit_event(host, "ssh_failed_spike", "high", value=sshf, baseline=None)
+    # ssh invalid spike
+    sshi = raw["ssh_invalid_1h"]
+    if sshi is not None and sshi >= th["ssh_invalid_warn"]:
+        b = bl.get("bl_sshi")
+        if b is not None and sshi > b * th["spike_multiplier"]:
+            _emit_event(host, "ssh_invalid_spike", "high", value=sshi, baseline=b)
+        elif b is None and sshi >= th["ssh_invalid_high"]:
+            _emit_event(host, "ssh_invalid_spike", "high", value=sshi, baseline=None)
+    # fail2ban ban increment
+    f2b = raw["f2b_banned"]
+    if f2b is not None and f2b > 0:
+        b = bl.get("bl_f2b")
+        if b is not None and f2b > b:
+            _emit_event(host, "fail2ban_ban", "medium", value=f2b, baseline=b,
+                        details={"banned": f2b, "baseline": b})
+
+
+def security_analyze(name, data):
+    """Orchestratore della Security Activity Dashboard. Chiamato in _poll_host
+    dopo persist. Calcola componenti SAI, score, stato (con hysteresis) e
+    rileva eventi (porte, peer, spike). Tutto collector-side, sonda invariata.
+    Target: < 100ms/host su carichi normali."""
+    try:
+        now = int(data.get("ts") or time.time())
+        # ultime 24h di metriche per le baseline
+        with db() as c:
+            rows = c.execute(
+                "SELECT ts, fw_drop_rate, ssh_failed_1h, ssh_invalid_1h, f2b_banned "
+                "FROM metrics WHERE host=? AND ts>=? ORDER BY ts",
+                (name, now - 86400)).fetchall()
+        components = _sai_components(name, data, rows)
+        sai, weights = _sai_score(components)
+        raw = components["_raw"]
+        state = _classify_state(name, sai, components, raw)
+        # persist SAI nella metrics row appena scritta (update ultima riga)
+        with db() as c:
+            c.execute("UPDATE metrics SET sai=? WHERE host=? AND ts=?",
+                      (sai, name, data["ts"]))
+        # detection eventi
+        sec = data.get("security") or {}
+        flows = data.get("flows") or {}
+        _detect_port_changes(name, sec.get("listening"), now)
+        _detect_peer_anomalies(name, flows, now)
+        _detect_spikes(name, data, rows, raw, raw)
+        # stato UNKNOWN se non ci sono abbastanza dati
+        if state == "unknown" and not any(components["_available"].values()):
+            _emit_event(name, "host_security_unknown", "low",
+                        details={"reason": "telemetria security non disponibile"})
+    except Exception:
+        # nessun errore di telemetria deve rompere il poller
+        pass
 
 
 def poll_once():
@@ -849,6 +1213,193 @@ def scan_loop():
         time.sleep(300)  # ricontrolla ogni 5 min
 
 
+# ---------------------------------------------------------------- Security Activity Dashboard API
+def _security_overview():
+    """KPI globali + stato per-host. Compatibile con host down/telemetria
+    assente: in quel caso stato=unknown e i campi None (NON 0)."""
+    now = int(time.time())
+    hosts_out = []
+    totals = {"active_attack": 0, "elevated": 0, "normal": 0, "unknown": 0,
+              "ssh_failed_1h": 0, "ssh_invalid_1h": 0, "f2b_banned": 0,
+              "new_ports": 0, "fw_drop_rate": 0.0}
+    for name, _t in list(HOSTS):
+        with _lock:
+            data = _latest.get(name) or {}
+        sec = data.get("security") or {}
+        flows = data.get("flows") or {}
+        r = data.get("rates") or {}
+        with _sec_lock:
+            st = _sec_state.get(name, {})
+        state = st.get("state", "unknown")
+        sai = st.get("sai", 0)
+        # conteggio nuove porte ultime 24h
+        new_ports = _count_new_ports(name, now - 86400)
+        listening = sec.get("listening") or []
+        h = {
+            "host": name,
+            "state": state,
+            "sai": sai,
+            "firewall_rate": r.get("fw_drop_rate"),
+            "ssh_failed_1h": sec.get("ssh_failed_1h"),
+            "ssh_invalid_1h": sec.get("ssh_invalid_1h"),
+            "f2b_banned": sec.get("f2b_banned"),
+            "f2b_total_failed": sec.get("f2b_total_failed"),
+            "listening_ports": len(listening),
+            "new_ports": new_ports,
+            "in_peers": flows.get("in_peers"),
+            "out_peers": flows.get("out_peers"),
+            "estab": (data.get("conns") or {}).get("estab"),
+            "last_ts": data.get("ts"),
+            "error": data.get("error"),
+        }
+        hosts_out.append(h)
+        if state in totals:
+            totals[state] += 1
+        # somme globali (None safe: somma solo se presente)
+        if h["ssh_failed_1h"] is not None:
+            totals["ssh_failed_1h"] += h["ssh_failed_1h"]
+        if h["ssh_invalid_1h"] is not None:
+            totals["ssh_invalid_1h"] += h["ssh_invalid_1h"]
+        if h["f2b_banned"] is not None:
+            totals["f2b_banned"] += h["f2b_banned"]
+        totals["new_ports"] += new_ports
+        if h["firewall_rate"] is not None:
+            totals["fw_drop_rate"] += h["firewall_rate"]
+    return {"ts": now, "hosts": hosts_out, "totals": totals}
+
+
+def _security_history(host, minutes):
+    """Serie temporale SAI con bucketing per non spedire migliaia di campioni.
+    <=1h raw, <=6h bucket 1m, <=24h bucket 5m, <=48h bucket 10m."""
+    mins = max(1, min(int(minutes or 60), RETENTION_H * 60))
+    since = int(time.time()) - mins * 60
+    with db() as c:
+        rows = c.execute(
+            "SELECT ts, sai, fw_drop_rate, ssh_failed_1h, ssh_invalid_1h, f2b_banned "
+            "FROM metrics WHERE host=? AND ts>=? ORDER BY ts", (host, since)).fetchall()
+    if mins <= 60:
+        bucket = 0       # raw
+    elif mins <= 360:
+        bucket = 60
+    elif mins <= 1440:
+        bucket = 300
+    else:
+        bucket = 600
+    points = []
+    if bucket == 0:
+        for r in rows:
+            points.append({"ts": r["ts"], "sai": r["sai"],
+                           "fw_rate": r["fw_drop_rate"], "ssh_failed": r["ssh_failed_1h"],
+                           "ssh_invalid": r["ssh_invalid_1h"], "f2b_banned": r["f2b_banned"]})
+    else:
+        # bucket: media dei valori nel bucket, sai = max (picco)
+        buckets = {}
+        for r in rows:
+            b = r["ts"] - (r["ts"] % bucket)
+            buckets.setdefault(b, []).append(r)
+        for b in sorted(buckets):
+            grp = buckets[b]
+            def avg(f):
+                vals = [g[f] for g in grp if g[f] is not None]
+                return round(statistics.mean(vals), 2) if vals else None
+            points.append({"ts": b, "sai": max((g["sai"] or 0) for g in grp),
+                           "fw_rate": avg("fw_drop_rate"), "ssh_failed": avg("ssh_failed_1h"),
+                           "ssh_invalid": avg("ssh_invalid_1h"), "f2b_banned": avg("f2b_banned")})
+    return {"host": host, "minutes": mins, "points": points}
+
+
+def _security_events(host, minutes, limit, event_type):
+    """Feed eventi security con filtro per tipo e finestra temporale."""
+    mins = max(1, min(int(minutes or 60), SECURITY_RETENTION_H * 60))
+    since = int(time.time()) - mins * 60
+    lim = max(1, min(int(limit or 200), 1000))
+    with db() as c:
+        if host:
+            q = ("SELECT id,ts,host,event_type,severity,value,baseline,details_json "
+                 "FROM security_events WHERE host=? AND ts>=?")
+            args = [host, since]
+        else:
+            q = ("SELECT id,ts,host,event_type,severity,value,baseline,details_json "
+                 "FROM security_events WHERE ts>=?")
+            args = [since]
+        if event_type and event_type != "all":
+            q += " AND event_type=?"
+            args.append(event_type)
+        q += " ORDER BY ts DESC LIMIT ?"
+        args.append(lim)
+        rows = c.execute(q, args).fetchall()
+    return {"events": [{"id": r["id"], "ts": r["ts"], "host": r["host"],
+                        "type": r["event_type"], "severity": r["severity"],
+                        "value": r["value"], "baseline": r["baseline"],
+                        "details": json.loads(r["details_json"] or "{}")} for r in rows]}
+
+
+def _security_peers(host):
+    """Peer di rete storici per host (per il drawer: new/rare/confirmed)."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT direction, ip, port, first_seen, last_seen, max_connections "
+            "FROM security_peers WHERE host=? ORDER BY last_seen DESC", (host,)).fetchall()
+    now = int(time.time())
+    out = []
+    for r in rows:
+        age = now - r["first_seen"]
+        # 'new' = apparso nelle ultime 6h, 'rare' = nelle ultime 24h, altrimenti 'confirmed'
+        if age < 21600:
+            status = "new"
+        elif age < 86400:
+            status = "rare"
+        else:
+            status = "confirmed"
+        out.append({"direction": r["direction"], "ip": r["ip"], "port": r["port"],
+                    "first_seen": r["first_seen"], "last_seen": r["last_seen"],
+                    "max_connections": r["max_connections"], "status": status})
+    return {"host": host, "peers": out}
+
+
+def _security_ports(host):
+    """Porte in ascolto storiche + correlazione nmap (listening vs reachable).
+    Distingue 'N/A' (scan assente) da '0 CVE' (vulners disattivato) da CVE reali."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT proto, addr, port, first_seen, last_seen "
+            "FROM security_ports WHERE host=? ORDER BY port", (host,)).fetchall()
+    now = int(time.time())
+    # porte raggiungibili dall'ultima scansione nmap
+    scan = get_scan(host)
+    reachable = {}   # "tcp/443" -> {service, cves, highest_cvss}
+    scan_status = "none"
+    if scan and scan.get("result"):
+        scan_status = scan.get("status", "none")
+        for p in (scan["result"].get("ports") or []):
+            key = "%s/%d" % (p.get("proto") or "tcp", p.get("port") or 0)
+            vulns = p.get("vulns") or []
+            reachable[key] = {
+                "service": p.get("service"), "product": p.get("product"),
+                "version": p.get("version"), "cve_count": len(vulns),
+                "highest_cvss": max((v.get("cvss") or 0) for v in vulns) if vulns else None,
+                "has_exploit": any(v.get("exploit") for v in vulns),
+            }
+    out = []
+    for r in rows:
+        key = "%s/%d" % (r["proto"], r["port"])
+        age = now - r["first_seen"]
+        is_new = age < 21600
+        rc = reachable.get(key)
+        out.append({
+            "proto": r["proto"], "addr": r["addr"], "port": r["port"],
+            "first_seen": r["first_seen"], "last_seen": r["last_seen"],
+            "is_new": is_new, "sensitive": r["port"] in SENSITIVE_PORTS,
+            "nmap_reachable": rc is not None,
+            "nmap_service": rc["service"] if rc else None,
+            "nmap_cve_count": rc["cve_count"] if rc else None,
+            "nmap_highest_cvss": rc["highest_cvss"] if rc else None,
+            "nmap_has_exploit": rc["has_exploit"] if rc else None,
+        })
+    return {"host": host, "ports": out, "scan_status": scan_status,
+            "nmap_enabled": NMAP_ENABLED, "vuln_enabled": NMAP_VULN}
+
+
 # ---------------------------------------------------------------- web
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -1033,6 +1584,34 @@ class Handler(BaseHTTPRequestHandler):
                 "note": ("Sul nuovo server: installa la sonda in %s (755) e aggiungi la riga "
                          "sopra a ~/.ssh/authorized_keys dell'utente indicato nel target." % FORCED_CMD),
             })
+        elif u.path == "/api/security/overview":
+            self._json(200, _security_overview())
+        elif u.path == "/api/security/history":
+            q = parse_qs(u.query)
+            host = (q.get("host") or [""])[0]
+            mins = (q.get("minutes") or ["60"])[0]
+            if not host or host not in [n for n, _ in HOSTS]:
+                return self._json(404, {"error": "host inesistente"})
+            self._json(200, _security_history(host, mins))
+        elif u.path == "/api/security/events":
+            q = parse_qs(u.query)
+            host = (q.get("host") or [""])[0]
+            mins = (q.get("minutes") or ["60"])[0]
+            lim = (q.get("limit") or ["200"])[0]
+            etype = (q.get("type") or ["all"])[0]
+            self._json(200, _security_events(host, mins, lim, etype))
+        elif u.path == "/api/security/peers":
+            q = parse_qs(u.query)
+            host = (q.get("host") or [""])[0]
+            if not host or host not in [n for n, _ in HOSTS]:
+                return self._json(404, {"error": "host inesistente"})
+            self._json(200, _security_peers(host))
+        elif u.path == "/api/security/ports":
+            q = parse_qs(u.query)
+            host = (q.get("host") or [""])[0]
+            if not host or host not in [n for n, _ in HOSTS]:
+                return self._json(404, {"error": "host inesistente"})
+            self._json(200, _security_ports(host))
         else:
             self._send(404, "not found", "text/plain")
 

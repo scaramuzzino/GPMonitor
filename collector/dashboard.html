@@ -462,6 +462,77 @@
   .scan-none{color:var(--mut);text-align:center;padding:26px 10px;line-height:1.6}
   .scan-err{color:var(--bad);background:#2a1213;border:1px solid var(--bad);border-radius:8px;
         padding:10px 12px;font-size:12.5px;margin-bottom:12px}
+  /* ---- Security Activity Dashboard (SAI) ---- */
+  .secdash{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .secdash .panel-head{margin-bottom:10px}
+  .secdash h3{font-size:13px;color:var(--fg);text-transform:none;letter-spacing:0;margin:0}
+  .seckpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:900px){.seckpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:560px){.seckpis{grid-template-columns:repeat(2,1fr)}}
+  .seckpi-tile{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:10px 8px 8px;text-align:center}
+  .seckpi-tile .v{font-size:22px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+  .seckpi-tile .v.red{color:var(--bad)} .seckpi-tile .v.amber{color:var(--warn)} .seckpi-tile .v.green{color:var(--ok)}
+  .seckpi-tile .l{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  /* tabella timeline SAI per host */
+  .sai-table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .sai-table th{color:var(--mut);font-weight:500;font-size:10px;text-transform:uppercase;text-align:left;
+    padding:5px 8px;border-bottom:1px solid var(--line)}
+  .sai-table th.num{text-align:right}
+  .sai-table td{padding:6px 8px;border-bottom:1px solid #1b2129;vertical-align:middle}
+  .sai-table tr{cursor:pointer}
+  .sai-table tr:hover{background:#1b2129}
+  .sai-table .host{font-weight:600}
+  .sai-table .spark{display:inline-block;vertical-align:middle}
+  .sai-table .sai-val{font-weight:800;font-variant-numeric:tabular-nums;text-align:right;font-size:15px}
+  .sai-table .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.04em}
+  .badge.normal{background:rgba(63,185,80,.18);color:var(--ok);border:1px solid rgba(63,185,80,.3)}
+  .badge.elevated{background:rgba(210,153,34,.18);color:var(--warn);border:1px solid rgba(210,153,34,.3)}
+  .badge.active_attack{background:rgba(248,81,73,.18);color:var(--bad);border:1px solid rgba(248,81,73,.3)}
+  .badge.unknown{background:rgba(110,118,129,.14);color:var(--mut);border:1px solid var(--line)}
+  /* Security Changes feed */
+  .secfeed{margin-top:14px}
+  .secfeed .ffilters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .secfeed .ffilters button{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
+    background:#0d1117;color:var(--mut);cursor:pointer}
+  .secfeed .ffilters button.active{border-color:var(--accent);color:var(--fg);background:#0d2137}
+  .secfeed .ffilters .winlbl{color:var(--mut);font-size:11px;align-self:center;margin-left:auto}
+  .evlist{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .evrow{display:flex;gap:10px;padding:7px 10px;border-bottom:1px solid #1b2129;font-size:12px;align-items:baseline}
+  .evrow:hover{background:#1b2129}
+  .evrow .evts{flex:0 0 56px;color:var(--mut);font-variant-numeric:tabular-nums;font-size:11px}
+  .evrow .evhost{flex:0 0 90px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .evrow .evtype{flex:0 0 150px;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  .evrow .evdesc{flex:1;color:var(--fg)}
+  .evrow .evsev{flex:0 0 auto;font-size:10px;text-transform:uppercase;font-weight:700}
+  .evsev.high{color:var(--bad)} .evsev.medium{color:var(--warn)} .evsev.low{color:var(--mut)}
+  .evempty{padding:20px;text-align:center;color:var(--mut)}
+  /* drawer security */
+  .drawer .sec-detail{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;font-size:12.5px}
+  @media(max-width:700px){.drawer .sec-detail{grid-template-columns:1fr}}
+  .drawer .sec-detail .row{display:flex;justify-content:space-between;border-bottom:1px solid #1b2129;padding:4px 0}
+  .drawer .sec-detail .row .k{color:var(--mut)}
+  .drawer .sec-detail .row .vv{font-variant-numeric:tabular-nums;font-weight:600}
+  .drawer .sec-detail .row .vv .delta{font-size:10px;margin-left:6px}
+  .drawer .sec-detail .row .vv .delta.up{color:var(--bad)} .drawer .sec-detail .row .vv .delta.down{color:var(--ok)}
+  .drawer .sec-sub{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);
+    font-weight:600;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .drawer .port-row{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #1b2129;font-size:12px;align-items:baseline}
+  .drawer .port-row .pp{flex:0 0 90px;font-weight:600;font-variant-numeric:tabular-nums}
+  .drawer .port-row .psvc{flex:1;color:var(--mut)}
+  .drawer .port-row .ptag{flex:0 0 auto;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid var(--line)}
+  .drawer .port-row .ptag.yes{color:var(--ok);border-color:rgba(63,185,80,.3)}
+  .drawer .port-row .ptag.no{color:var(--bad);border-color:rgba(248,81,73,.3)}
+  .drawer .port-row .ptag.na{color:var(--mut)}
+  .drawer .port-row .ptag.new{color:var(--warn);border-color:rgba(210,153,34,.3);background:rgba(210,153,34,.1)}
+  .drawer .port-row .ptag.sens{color:var(--bad);border-color:rgba(248,81,73,.3);background:rgba(248,81,73,.08)}
+  .drawer .peer-row{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #1b2129;font-size:12px;align-items:baseline}
+  .drawer .peer-row .pip{flex:0 0 140px;font-weight:600;font-variant-numeric:tabular-nums}
+  .drawer .peer-row .pdir{flex:0 0 70px;font-size:10px;text-transform:uppercase;color:var(--mut)}
+  .drawer .peer-row .pstat{flex:0 0 80px;font-size:10px;text-transform:uppercase;font-weight:700}
+  .drawer .peer-row .pstat.new{color:var(--warn)} .drawer .peer-row .pstat.rare{color:var(--accent)}
+  .drawer .peer-row .pstat.confirmed{color:var(--ok)}
+  .drawer .peer-row .pinfo{flex:1;color:var(--mut);font-size:11px}
 </style>
 </head>
 <body>
@@ -527,6 +598,26 @@
       </div>
     </div>
     <div class="snk" id="flowSnk"></div>
+  </div>
+
+  <!-- Security Activity Dashboard (SAI) -->
+  <div class="secdash">
+    <div class="panel-head">
+      <h3>Sicurezza — Security Activity Dashboard</h3>
+      <span class="livedot">REALTIME</span>
+    </div>
+    <!-- KPI globali -->
+    <div class="seckpis" id="secKpis"></div>
+    <!-- timeline SAI per host -->
+    <table class="sai-table">
+      <thead><tr><th>Server</th><th>Timeline SAI</th><th class="num">SAI</th><th>Stato</th></tr></thead>
+      <tbody id="saiRows"></tbody>
+    </table>
+    <!-- Security Changes feed -->
+    <div class="secfeed">
+      <div class="ffilters" id="secFilters"></div>
+      <div class="evlist" id="secEvents"></div>
+    </div>
   </div>
 
 </div>
@@ -597,6 +688,13 @@
   <div class="dwbody" id="scanBody"></div>
 </aside>
 
+<!-- drawer security activity (SAI detail per server) -->
+<div class="drawer-ovl" id="secOvl"></div>
+<aside class="drawer wide" id="secDrawer" aria-hidden="true">
+  <div class="dwh">🛡 <b id="secTitle">Security Activity</b><span class="x" id="secX">✕</span></div>
+  <div class="dwbody" id="secBody"></div>
+</aside>
+
 <script>
 // ------------------------------------------------------------ util
 const HB = ["B","KB","MB","GB","TB","PB"];
@@ -639,6 +737,15 @@ let dockSort = {key:"sev", dir:1};   // sev|name|cpu|mem ; dir 1=asc -1=desc
 // flussi di rete (Sankey): server selezionato + direzioni attive (multi-selezione)
 let flowHosts = [];         // server selezionati (multiselezione; vuoto = tutti)
 let flowDirs = ["in"];      // sottoinsieme di ["in","out"]; entrambi = server al centro
+
+// Security Activity Dashboard (SAI)
+let SEC_OVERVIEW = {hosts:[], totals:{}};
+let SEC_HIST = {};          // host -> points[]
+let SEC_EVENTS = [];
+let secWinMin = 60;         // finestra timeline SAI (15m/1h/6h/24h/48h)
+let secEvWinMin = 60;       // finestra Security Changes feed
+let secEvFilter = "all";    // filtro tipo evento
+let secDrawerHost = null;   // host aperto nel drawer security
 
 // nomi noti delle porte (per etichettare i flussi)
 const PORT_NAMES = {22:"SSH",25:"SMTP",53:"DNS",80:"HTTP",110:"POP3",143:"IMAP",443:"HTTPS",
@@ -1344,6 +1451,241 @@ function renderLegend(elId, field, fmt){
     || `<span class="it">nessun server selezionato</span>`;
 }
 
+// ------------------------------------------------------------ Security Activity Dashboard (SAI)
+function saiSparkline(points, color){
+  // mini sparkline SVG del SAI nel tempo (0-100). points = [{ts,sai,...}]
+  if(!points || points.length<2) return '<svg class="spark" width="180" height="22"></svg>';
+  const w=180,h=22,pad=2;
+  const xs=points.map(p=>p.ts), ys=points.map(p=>p.sai||0);
+  const xmin=Math.min(...xs), xmax=Math.max(...xs), xr=(xmax-xmin)||1;
+  const pts=points.map((p,i)=>{
+    const x=pad+(p.ts-xmin)/xr*(w-2*pad);
+    const y=h-pad-(p.sai||0)/100*(h-2*pad);
+    return x.toFixed(1)+","+y.toFixed(1);
+  }).join(" ");
+  const last=points[points.length-1];
+  const lastY=h-pad-(last.sai||0)/100*(h-2*pad);
+  const lastX=pad+(last.ts-xmin)/xr*(w-2*pad);
+  return `<svg class="spark" width="${w}" height="${h}" title="SAI ${last.sai||0}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/>
+    <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="2.5" fill="${color}"/>
+  </svg>`;
+}
+function saiColor(sai){ return sai>=75?"var(--bad)":sai>=40?"var(--warn)":"var(--ok)"; }
+function stateBadge(state){
+  const lbl={normal:"NORMAL",elevated:"ELEVATED","active_attack":"ACTIVE ATTACK",unknown:"UNKNOWN"};
+  return `<span class="badge ${state}">${lbl[state]||state}</span>`;
+}
+function renderSecKpis(){
+  const t=SEC_OVERVIEW.totals||{};
+  const tiles=[
+    {v:t.active_attack||0, l:"Active Attack", c:t.active_attack>0?"red":""},
+    {v:(t.ssh_failed_1h||0), l:"SSH Failures /h", c:(t.ssh_failed_1h||0)>0?"amber":""},
+    {v:(t.ssh_invalid_1h||0), l:"Invalid Users /h", c:(t.ssh_invalid_1h||0)>0?"amber":""},
+    {v:fmtFwRate(t.fw_drop_rate||0), l:"FW Drop /min", c:(t.fw_drop_rate||0)>20?"amber":""},
+    {v:(t.f2b_banned||0), l:"Fail2ban Banned", c:(t.f2b_banned||0)>0?"amber":""},
+    {v:(t.new_ports||0), l:"New Ports", c:(t.new_ports||0)>0?"amber":""},
+  ];
+  document.getElementById("secKpis").innerHTML=tiles.map(t=>
+    `<div class="seckpi-tile"><div class="v ${t.c}">${t.v}</div><div class="l">${t.l}</div></div>`).join("");
+}
+function fmtFwRate(n){ if(n==null) return "—"; if(n>=1000) return (n/1000).toFixed(1)+"k"; return n.toFixed(0); }
+function renderSaiRows(){
+  const hosts=SEC_OVERVIEW.hosts||[];
+  if(!hosts.length){ document.getElementById("saiRows").innerHTML='<tr><td colspan="4" class="evempty">nessun server</td></tr>'; return; }
+  // ordina per SAI desc (active attack in cima)
+  hosts.sort((a,b)=>(b.sai||0)-(a.sai||0));
+  document.getElementById("saiRows").innerHTML=hosts.map(h=>{
+    const hist=SEC_HIST[h.host]||[];
+    const color=saiColor(h.sai||0);
+    return `<tr data-sechost="${escapeHtml(h.host)}">
+      <td class="host">${escapeHtml(h.host)}${h.error?' <span style="color:var(--bad)">⚠</span>':''}</td>
+      <td>${saiSparkline(hist,color)}</td>
+      <td class="sai-val" style="color:${color}">${h.sai==null?"—":h.sai}</td>
+      <td>${stateBadge(h.state)}</td>
+    </tr>`;
+  }).join("");
+}
+const SEC_EV_TYPES={
+  firewall_spike:"Firewall Spike", ssh_failed_spike:"SSH Failed Spike",
+  ssh_invalid_spike:"Invalid Users Spike", fail2ban_ban:"Fail2ban Ban",
+  new_listen_port:"New Listen Port", removed_listen_port:"Removed Port",
+  new_inbound_peer:"New Inbound Peer", new_outbound_peer:"New Outbound Peer",
+  connection_spike:"Connection Spike", scan_exposure_change:"Scan Exposure",
+  cve_change:"CVE Change", host_security_unknown:"Telemetry Unavailable"
+};
+function renderSecFilters(){
+  const wins=[["15m",15],["1h",60],["6h",360],["24h",1440]];
+  const types=["all","Firewall","SSH","Fail2ban","Ports","Network","Nmap"];
+  const typeMap={all:"all",Firewall:"firewall_spike",SSH:"ssh_failed_spike,ssh_invalid_spike",
+    Fail2ban:"fail2ban_ban",Ports:"new_listen_port,removed_listen_port",
+    Network:"new_inbound_peer,new_outbound_peer,connection_spike",Nmap:"scan_exposure_change,cve_change"};
+  let h='<div class="ffilters">';
+  types.forEach(t=>{
+    const k=typeMap[t];
+    const active=(secEvFilter===k)?"active":"";
+    h+=`<button class="${active}" data-secfilter="${k}">${t}</button>`;
+  });
+  wins.forEach(([lbl,m])=>{
+    const active=(secEvWinMin===m)?"active":"";
+    h+=`<button class="${active}" data-secwin="${m}">${lbl}</button>`;
+  });
+  h+='</div>';
+  document.getElementById("secFilters").innerHTML=h;
+}
+function renderSecEvents(){
+  let evs=SEC_EVENTS||[];
+  if(!evs.length){ document.getElementById("secEvents").innerHTML='<div class="evempty">nessun evento security nella finestra selezionata</div>'; return; }
+  document.getElementById("secEvents").innerHTML=evs.map(e=>
+    `<div class="evrow">
+      <span class="evts">${hm(e.ts)}</span>
+      <span class="evhost">${escapeHtml(e.host)}</span>
+      <span class="evtype">${SEC_EV_TYPES[e.type]||e.type}</span>
+      <span class="evdesc">${escapeHtml(evDesc(e))}</span>
+      <span class="evsev ${e.severity}">${e.severity}</span>
+    </div>`).join("");
+}
+function evDesc(e){
+  const d=e.details||{};
+  switch(e.type){
+    case "firewall_spike": return `${fmtFwRate(e.value)} /min (baseline ${e.baseline==null?"n/a":fmtFwRate(e.baseline)})`;
+    case "ssh_failed_spike": return `${e.value} /h (baseline ${e.baseline==null?"n/a":e.baseline})`;
+    case "ssh_invalid_spike": return `${e.value} /h (baseline ${e.baseline==null?"n/a":e.baseline})`;
+    case "fail2ban_ban": return `banned ${e.value} (baseline ${e.baseline==null?"n/a":e.baseline})`;
+    case "new_listen_port": return `${(d.proto||"").toUpperCase()}/${d.port} su ${d.addr||"*"}${d.sensitive?" ⚠ sensibile":""}`;
+    case "removed_listen_port": return `${(d.proto||"").toUpperCase()}/${d.port} non più in ascolto`;
+    case "new_inbound_peer": case "new_outbound_peer":
+      return `${d.ip}:${d.port} (${d.direction}, ${d.n} conn)`;
+    case "host_security_unknown": return d.reason||"telemetria non disponibile";
+    default: return e.value!=null?String(e.value):"";
+  }
+}
+function openSecDrawer(host){
+  secDrawerHost=host;
+  document.getElementById("secOvl").classList.add("on");
+  document.getElementById("secDrawer").setAttribute("aria-hidden","false");
+  document.getElementById("secTitle").textContent=host+" — Security Activity";
+  loadSecDrawer();
+}
+function closeSecDrawer(){
+  secDrawerHost=null;
+  document.getElementById("secOvl").classList.remove("on");
+  document.getElementById("secDrawer").setAttribute("aria-hidden","true");
+}
+async function loadSecDrawer(){
+  const host=secDrawerHost;
+  if(!host) return;
+  document.getElementById("secBody").innerHTML='<div class="dload">caricamento…</div>';
+  try{
+    const [ov, hist, evs, peers, ports] = await Promise.all([
+      fetch("/api/security/overview").then(r=>r.json()),
+      fetch(`/api/security/history?host=${encodeURIComponent(host)}&minutes=${secWinMin}`).then(r=>r.json()),
+      fetch(`/api/security/events?host=${encodeURIComponent(host)}&minutes=1440&limit=50`).then(r=>r.json()),
+      fetch(`/api/security/peers?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+      fetch(`/api/security/ports?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+    ]);
+    const h=(ov.hosts||[]).find(x=>x.host===host)||{};
+    const points=hist.points||[];
+    renderSecDrawer(host, h, points, evs.events||[], peers.peers||[], ports);
+  }catch(e){ document.getElementById("secBody").innerHTML='<div class="dload">errore caricamento</div>'; }
+}
+function renderSecDrawer(host, h, points, events, peers, ports){
+  const lastTs=h.last_ts?ago(h.last_ts):"—";
+  const fwDelta=pctDelta(h.firewall_rate, h);  // placeholder: delta vs baseline non in overview
+  const body=`
+    <div class="sec-detail">
+      <div class="row"><span class="k">Stato</span><span class="vv">${stateBadge(h.state)}</span></div>
+      <div class="row"><span class="k">SAI</span><span class="vv" style="color:${saiColor(h.sai||0)}">${h.sai==null?"—":h.sai}</span></div>
+      <div class="row"><span class="k">Last sample</span><span class="vv">${lastTs}</span></div>
+      <div class="row"><span class="k">Firewall drop</span><span class="vv">${fmtFwRate(h.firewall_rate)} /min</span></div>
+      <div class="row"><span class="k">SSH failed</span><span class="vv">${h.ssh_failed_1h==null?"N/A":h.ssh_failed_1h+" /h"}</span></div>
+      <div class="row"><span class="k">Invalid users</span><span class="vv">${h.ssh_invalid_1h==null?"N/A":h.ssh_invalid_1h+" /h"}</span></div>
+      <div class="row"><span class="k">Fail2ban banned</span><span class="vv">${h.f2b_banned==null?"N/A":h.f2b_banned}</span></div>
+      <div class="row"><span class="k">Fail2ban total failed</span><span class="vv">${h.f2b_total_failed==null?"N/A":h.f2b_total_failed}</span></div>
+      <div class="row"><span class="k">Listening ports</span><span class="vv">${h.listening_ports==null?"N/A":h.listening_ports}</span></div>
+      <div class="row"><span class="k">New ports (24h)</span><span class="vv">${h.new_ports==null?"N/A":h.new_ports}</span></div>
+      <div class="row"><span class="k">Inbound peers</span><span class="vv">${h.in_peers==null?"N/A":h.in_peers}</span></div>
+      <div class="row"><span class="k">Outbound peers</span><span class="vv">${h.out_peers==null?"N/A":h.out_peers}</span></div>
+      <div class="row"><span class="k">Established conn</span><span class="vv">${h.estab==null?"N/A":h.estab}</span></div>
+    </div>
+    <div class="sec-sub">Timeline SAI (${winLabel(secWinMin)})</div>
+    <div>${saiSparklineBig(points)}</div>
+    <div class="sec-sub">Listening vs Nmap Reachable</div>
+    <div>${renderPortRows(ports)}</div>
+    <div class="sec-sub">Network Peers</div>
+    <div>${renderPeerRows(peers)}</div>
+    <div class="sec-sub">Eventi recenti (24h)</div>
+    <div>${renderDrawerEvents(events)}</div>
+  `;
+  document.getElementById("secBody").innerHTML=body;
+}
+function pctDelta(cur, h){ return ""; }  // placeholder (delta vs baseline richiede baseline per-host)
+function saiSparklineBig(points){
+  if(!points||points.length<2) return '<div class="evempty">dati insufficienti</div>';
+  const w=560,h=80,pad=6;
+  const xs=points.map(p=>p.ts), ys=points.map(p=>p.sai||0);
+  const xmin=Math.min(...xs), xmax=Math.max(...xs), xr=(xmax-xmin)||1;
+  const pts=points.map(p=>{
+    const x=pad+(p.ts-xmin)/xr*(w-2*pad);
+    const y=h-pad-(p.sai||0)/100*(h-2*pad);
+    return x.toFixed(1)+","+y.toFixed(1);
+  }).join(" ");
+  // griglia 40/75 (soglie hysteresis)
+  const y40=h-pad-40/100*(h-2*pad), y75=h-pad-75/100*(h-2*pad);
+  return `<svg width="${w}" height="${h}" style="max-width:100%">
+    <line x1="${pad}" y1="${y40}" x2="${w-pad}" y2="${y40}" stroke="rgba(210,153,34,.3)" stroke-dasharray="3,3"/>
+    <line x1="${pad}" y1="${y75}" x2="${w-pad}" y2="${y75}" stroke="rgba(248,81,73,.3)" stroke-dasharray="3,3"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+  </svg>`;
+}
+function renderPortRows(ports){
+  const p=ports.ports||[];
+  if(!p.length) return '<div class="evempty">nessuna porta in ascolto registrata</div>';
+  return p.map(x=>{
+    const reach=x.nmap_reachable?'<span class="ptag yes">nmap YES</span>':'<span class="ptag no">nmap NO</span>';
+    const nw=x.is_new?'<span class="ptag new">NEW</span>':'';
+    const sens=x.sensitive?'<span class="ptag sens">sensibile</span>':'';
+    const cve=x.nmap_cve_count!=null?`<span class="ptag">${x.nmap_cve_count} CVE</span>`:
+      (ports.scan_status==="none"?'<span class="ptag na">scan N/A</span>':'');
+    const svc=x.nmap_service?`<span class="psvc">${escapeHtml(x.nmap_service)} ${escapeHtml(x.nmap_product||"")} ${escapeHtml(x.nmap_version||"")}</span>`:'<span class="psvc">—</span>';
+    return `<div class="port-row"><span class="pp">${(x.proto||"").toUpperCase()}/${x.port}</span>${svc}${reach}${nw}${sens}${cve}</div>`;
+  }).join("");
+}
+function renderPeerRows(peers){
+  if(!peers.length) return '<div class="evempty">nessun peer registrato</div>';
+  return peers.slice(0,30).map(p=>
+    `<div class="peer-row"><span class="pip">${escapeHtml(p.ip)}:${p.port}</span>
+      <span class="pdir">${p.direction}</span><span class="pstat ${p.status}">${p.status}</span>
+      <span class="pinfo">first seen ${ago(p.first_seen)} · max ${p.max_connections} conn</span></div>`).join("");
+}
+function renderDrawerEvents(events){
+  if(!events.length) return '<div class="evempty">nessun evento recente</div>';
+  return events.slice(0,20).map(e=>
+    `<div class="evrow"><span class="evts">${hm(e.ts)}</span>
+      <span class="evtype">${SEC_EV_TYPES[e.type]||e.type}</span>
+      <span class="evdesc">${escapeHtml(evDesc(e))}</span>
+      <span class="evsev ${e.severity}">${e.severity}</span></div>`).join("");
+}
+async function refreshSec(){
+  try{
+    const ov=await (await fetch("/api/security/overview")).then(r=>r.json());
+    SEC_OVERVIEW=ov;
+    // history per ogni host (per le sparkline nella tabella)
+    const hist=await (await fetch(`/api/security/history?minutes=${secWinMin}`)).then(r=>r.json());
+    // /api/security/history senza host non esiste: fetch per-host in parallelo
+    const promises=(ov.hosts||[]).map(h=>fetch(`/api/security/history?host=${encodeURIComponent(h.host)}&minutes=${secWinMin}`).then(r=>r.json()));
+    const results=await Promise.all(promises);
+    SEC_HIST={}; (ov.hosts||[]).forEach((h,i)=>{ SEC_HIST[h.host]=(results[i]||{}).points||[]; });
+    renderSecKpis(); renderSaiRows();
+    // events feed
+    const evs=await (await fetch(`/api/security/events?minutes=${secEvWinMin}&limit=200${secEvFilter!=="all"?`&type=${secEvFilter}`:""}`)).then(r=>r.json());
+    SEC_EVENTS=evs.events||[];
+    renderSecEvents();
+    // drawer aperto? aggiorna
+    if(secDrawerHost && document.getElementById("secOvl").classList.contains("on")) loadSecDrawer();
+  }catch(e){ /* silently degrade: la dashboard principale continua */ }
+}
+
 function redraw(){
   // carosello card host (preservo lo scroll orizzontale + card "aggiungi")
   const cardsEl = document.getElementById("cards");
@@ -1389,7 +1731,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -1432,6 +1774,10 @@ document.addEventListener("click", e=>{
     if(it){ const txt=(it.commands||[]).join("\n");
       copyClip(txt).then(ok=>{ if(!ok) openCopy("Comandi — "+(it.service||""), txt);
         else { t.textContent="✓ copiati"; setTimeout(()=>{ t.textContent="📋 copia comandi"; }, 1500); } }); } }
+  else if(t.dataset.sechost){ openSecDrawer(t.dataset.sechost); }
+  else if(t.dataset.secfilter){ secEvFilter=t.dataset.secfilter; renderSecFilters(); refreshSec(); }
+  else if(t.dataset.secwin){ secEvWinMin=+t.dataset.secwin; renderSecFilters(); refreshSec(); }
+  else if(t.dataset.secx){ closeSecDrawer(); }
 });
 
 // frecce carosello
@@ -1672,9 +2018,11 @@ document.getElementById("usrOvl").onclick=closeUsers;
 document.getElementById("nuCreate").onclick=createUser;
 document.getElementById("scanX").onclick=closeScan;
 document.getElementById("scanOvl").onclick=closeScan;
+document.getElementById("secX").onclick=closeSecDrawer;
+document.getElementById("secOvl").onclick=(e)=>{ if(e.target.id==="secOvl") closeSecDrawer(); };
 document.getElementById("dockX").onclick=closeDock;
 document.getElementById("dockOvl").onclick=(e)=>{ if(e.target.id==="dockOvl") closeDock(); };
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeCopy(); closeUsers(); closeConfig(); closeScan(); closeDock(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeCopy(); closeUsers(); closeConfig(); closeScan(); closeSecDrawer(); closeDock(); } });
 
 // ------------------------------------------------------------ scansione nmap (drawer)
 let scanHost=null, scanTimer=null, scanData=null;
@@ -2025,6 +2373,10 @@ setInterval(refresh, REFRESH);
 // KPI di sicurezza: subito dopo il primo refresh, poi ogni 60s
 setTimeout(loadScans, 1200);
 setInterval(loadScans, 60000);
+// Security Activity Dashboard (SAI): refresh ogni 15s (coerente col polling)
+renderSecFilters();
+setTimeout(refreshSec, 1500);
+setInterval(refreshSec, 15000);
 </script>
 </body>
 </html>
