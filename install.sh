@@ -9,6 +9,9 @@ if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
+echo "==> Configurazione (.env)..."
+[ -f .env ] || cp .env.example .env
+
 echo "==> Chiave di monitoraggio (genero se assente)..."
 mkdir -p ssh data
 if [ ! -f ssh/monitor_ed25519 ]; then

@@ -14,7 +14,10 @@ __pycache__/
 .DS_Store
 # ambienti / editor
 .env
-.env.*
+.env.local
+.env.*.local
+!*.env.example
+!.env.example
 venv/
 .venv/
 .idea/
@@ -22,3 +25,6 @@ venv/
 # log e artefatti di deploy
 *.log
 *.tar.gz
+accesso-gitlab.md
+# prompt di progetto (non versionare)
+GPMonitor-Security-Server-Activity-Realtime-Dashboard-Prompt.md

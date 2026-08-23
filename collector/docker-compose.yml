@@ -12,28 +12,20 @@ services:
     cap_add:
       - NET_RAW
       - NET_ADMIN
+    # I valori vengono da .env (nella stessa cartella) con default sensati.
+    # Copia .env.example in .env e personalizza: .env NON va committato.
     environment:
-      # nome=utente@host per ogni server da monitorare (host = IP o hostname raggiungibile in SSH).
-      # Puoi anche lasciarlo vuoto e aggiungere i server dalla dashboard (Config).
-      MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2"
-      # indirizzo:porta su cui esporre la web. Tienila su rete fidata (loopback/VPN/Tailscale):
-      # NON esporla direttamente su internet (evita 0.0.0.0 su IP pubblici).
-      MON_BIND: "127.0.0.1:8888"
-      MON_INTERVAL: "15"
-      MON_RETENTION_HOURS: "48"
-      # scansione nmap (agentless): rescan automatico + on-demand dal drawer
-      MON_NMAP: "1"
-      MON_NMAP_INTERVAL_HOURS: "6"
-      MON_NMAP_TOP_PORTS: "1000"
-      # profondità piena: -p- (tutte le 65535 porte). 0 = solo le top-ports.
-      MON_NMAP_DEEP: "0"
-      # correlazione CVE via NSE vulners (CPE->CVE). NB: interroga vulners.com (uscita internet):
-      # con 1 NON è più 100% on-premise. Toggle anche da Config, persistito in kv['nmap_vuln'].
-      MON_NMAP_VULN: "0"
-      # tetto CVE per porta: 0 = nessun tetto (conteggi onesti)
-      MON_NMAP_VULN_CAP: "0"
-      # destinatario di report/avvisi email (modificabile anche da Config)
-      MON_REPORT_EMAIL: ""
+      MON_HOSTS: "${MON_HOSTS:-}"
+      MON_BIND: "${MON_BIND:-127.0.0.1:8888}"
+      MON_INTERVAL: "${MON_INTERVAL:-15}"
+      MON_RETENTION_HOURS: "${MON_RETENTION_HOURS:-48}"
+      MON_NMAP: "${MON_NMAP:-1}"
+      MON_NMAP_INTERVAL_HOURS: "${MON_NMAP_INTERVAL_HOURS:-6}"
+      MON_NMAP_TOP_PORTS: "${MON_NMAP_TOP_PORTS:-1000}"
+      MON_NMAP_DEEP: "${MON_NMAP_DEEP:-0}"
+      MON_NMAP_VULN: "${MON_NMAP_VULN:-0}"
+      MON_NMAP_VULN_CAP: "${MON_NMAP_VULN_CAP:-0}"
+      MON_REPORT_EMAIL: "${MON_REPORT_EMAIL:-}"
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:

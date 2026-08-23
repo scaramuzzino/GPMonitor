@@ -88,11 +88,16 @@ cd gpmonitor
 ./install.sh
 ```
 
-Poi modifica `collector/docker-compose.yml` (`MON_HOSTS`, `MON_BIND`, `MON_REPORT_EMAIL`) e applica:
+Poi configura: copia `collector/.env.example` in `collector/.env` e personalizza
+(`MON_HOSTS`, `MON_BIND`, `MON_REPORT_EMAIL`, …), quindi applica:
 
 ```bash
-cd collector && docker compose up -d
+cd collector && cp -n .env.example .env && $EDITOR .env
+docker compose up -d
 ```
+
+> La **configurazione** vive in `collector/.env` (in `.gitignore`, **mai committato**): così il
+> codice resta pubblico e la tua config privata. Aggiorni con `git pull` + `docker compose up -d --build`.
 
 Oppure, senza installer:
 
@@ -100,7 +105,7 @@ Oppure, senza installer:
 cd gpmonitor/collector
 mkdir -p ssh data
 ssh-keygen -t ed25519 -N "" -f ssh/monitor_ed25519 -C "gpmon@$(hostname)"
-# modifica docker-compose.yml (MON_HOSTS, MON_BIND, ...)
+cp -n .env.example .env    # poi personalizza .env
 docker compose up -d --build
 ```
 
@@ -133,7 +138,9 @@ restano in attesa di approvazione.
 
 ---
 
-## Configurazione (env `MON_*` in `docker-compose.yml`)
+## Configurazione (`collector/.env`)
+
+La config sta in `collector/.env` (copia da `.env.example`); la compose la legge via `${MON_*}`.
 
 | Variabile | Significato |
 |---|---|
