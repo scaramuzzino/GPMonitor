@@ -286,6 +286,30 @@
   .dwmsg{font-size:12.5px;min-height:16px;margin-top:10px}
   .dwmsg.err{color:var(--bad)} .dwmsg.ok{color:var(--ok)}
 
+  /* ---- drawer Guida ---- */
+  .gd h4{font-size:14px;margin:2px 0 8px;color:var(--fg)}
+  .gd p{font-size:12.5px;line-height:1.55;color:#c9d1d9;margin:0 0 10px}
+  .gd .lead{font-size:13px;color:var(--fg)}
+  .gd b{color:var(--fg)}
+  .gd .diagram{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:12px 12px 6px;margin:6px 0 12px}
+  .gd .diagram svg{display:block;width:100%;height:auto}
+  .gd .wcap{font-size:11px;color:var(--mut);text-align:center;margin:2px 0 4px}
+  .gd .note{font-size:11.5px;color:var(--mut);border-left:2px solid var(--accent);padding:3px 0 3px 10px;margin:0 0 12px}
+  .gd ul{margin:0 0 12px;padding-left:2px;list-style:none}
+  .gd li{font-size:12.5px;line-height:1.5;color:#c9d1d9;margin-bottom:6px;padding-left:20px;position:relative}
+  .gd li::before{content:"›";position:absolute;left:6px;color:var(--accent);font-weight:700}
+  .gd li .n{position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:var(--accent);
+        color:#04101f;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+  .gd li.num{padding-left:22px}
+  .gd code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#0d1117;border:1px solid var(--line);
+        border-radius:5px;padding:1px 5px;color:#c9d1d9}
+  .gd .pill{display:inline-block;font-size:10.5px;padding:1px 8px;border-radius:20px;border:1px solid;font-weight:700}
+  .gd .pill.normal{color:var(--ok);border-color:var(--ok)} .gd .pill.elev{color:var(--warn);border-color:var(--warn)}
+  .gd .pill.att{color:var(--bad);border-color:var(--bad)} .gd .pill.unk{color:var(--mut);border-color:var(--line)}
+  .gd .kbox{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px;
+        font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#c9d1d9;line-height:1.6}
+  .gd .kbox .op{color:var(--accent)}
+
   /* ---- drawer scansione nmap (report grafico) ---- */
   .card h2 .scanbtn{font-size:10.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);
         background:#0d1117;color:var(--mut);cursor:pointer;user-select:none;white-space:nowrap;margin-left:6px}
@@ -558,6 +582,7 @@
   </div>
   <span class="meta" id="meta">avvio…</span>
   <span class="who" id="who"></span>
+  <button class="gear" id="guideBtn" title="cos'è la SAI, come funziona, quali controlli fa e legenda delle card">❓ Guida</button>
   <button class="gear" id="usersBtn" style="display:none">👥 Utenti</button>
   <button class="gear" id="gear">⚙ Config</button>
   <button class="gear" id="logout">Esci</button>
@@ -670,6 +695,172 @@
       <button id="nuCreate">Crea utente</button>
     </div>
     <div class="dwmsg" id="usrMsg"></div>
+  </div>
+</aside>
+
+<!-- drawer Guida: SAI, controlli, legenda -->
+<div class="drawer-ovl" id="guideOvl"></div>
+<aside class="drawer wide gd" id="guideDrawer" aria-hidden="true">
+  <div class="dwh">❓ <b>Guida — come leggere GP monitor</b><span class="x" id="guideX">✕</span></div>
+  <div class="dwbody">
+
+    <div class="dwsec first">1 · Cos'è la SAI (Security Activity Index)</div>
+    <p class="lead">La <b>SAI</b> è un numero da <b>0 a 100</b> che misura <b>quanto è insolita l'attività di sicurezza</b> su un server <b>in questo momento</b>, rispetto al suo comportamento abituale.</p>
+    <p>Risponde a «<b>sta succedendo qualcosa di anomalo ora?</b>» — <b>non</b> a «sono stato compromesso?». È un indicatore di <b>intensità/attività</b>, non un punteggio di rischio o una diagnosi di intrusione: SAI alta = molto rumore di sicurezza (scansioni, brute-force, drop firewall) fuori dalla norma, da guardare; SAI bassa = tutto nella norma. Per questo non usiamo mai etichette come «compromesso»: GP monitor non ha le prove per affermarlo.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 400 76" role="img" aria-label="scala SAI 0-100">
+        <text x="60" y="12" fill="#3fb950" font-size="11" font-weight="700">NORMAL</text>
+        <text x="188" y="12" fill="#d29922" font-size="11" font-weight="700">ELEVATED</text>
+        <text x="312" y="12" fill="#f85149" font-size="11" font-weight="700">ACTIVE</text>
+        <rect x="10" y="22" width="152" height="16" rx="2" fill="#1f6f3f"/>
+        <rect x="162" y="22" width="133" height="16" fill="#8a6d1f"/>
+        <rect x="295" y="22" width="95" height="16" rx="2" fill="#8a2f2f"/>
+        <line x1="162" y1="18" x2="162" y2="46" stroke="#e6edf3" stroke-width="1.5"/>
+        <line x1="295" y1="18" x2="295" y2="46" stroke="#e6edf3" stroke-width="1.5"/>
+        <text x="8" y="60" fill="#8b949e" font-size="11">0</text>
+        <text x="150" y="60" fill="#e6edf3" font-size="11">40</text>
+        <text x="284" y="60" fill="#e6edf3" font-size="11">75</text>
+        <text x="374" y="60" fill="#8b949e" font-size="11">100</text>
+      </svg>
+      <div class="wcap">Sotto 40 = normale · 40–75 = elevata (da tenere d'occhio) · sopra 75 = possibile attacco in corso</div>
+    </div>
+
+    <div class="dwsec">2 · Come si calcola</div>
+    <p>La SAI è la <b>media pesata di 6 componenti</b>, ognuno confrontato con la <b>baseline</b> del server (vedi punto 3) e portato in scala 0–100. I pesi (quanto conta ciascun segnale):</p>
+    <div class="diagram">
+      <svg viewBox="0 0 400 200" role="img" aria-label="componenti SAI e relativi pesi">
+        <g font-size="11">
+          <text x="0" y="21" fill="#c9d1d9">SSH falliti</text>       <rect x="118" y="9"   width="150" height="15" rx="3" fill="#58a6ff"/><text x="274" y="21" fill="#8b949e">25%</text>
+          <text x="0" y="52" fill="#c9d1d9">Firewall (drop)</text>   <rect x="118" y="40"  width="120" height="15" rx="3" fill="#39d0d8"/><text x="244" y="52" fill="#8b949e">20%</text>
+          <text x="0" y="83" fill="#c9d1d9">SSH invalidi</text>      <rect x="118" y="71"  width="120" height="15" rx="3" fill="#a371f7"/><text x="244" y="83" fill="#8b949e">20%</text>
+          <text x="0" y="114" fill="#c9d1d9">fail2ban</text>         <rect x="118" y="102" width="90"  height="15" rx="3" fill="#3fb950"/><text x="214" y="114" fill="#8b949e">15%</text>
+          <text x="0" y="145" fill="#c9d1d9">Nuove porte</text>      <rect x="118" y="133" width="90"  height="15" rx="3" fill="#d29922"/><text x="214" y="145" fill="#8b949e">15%</text>
+          <text x="0" y="176" fill="#c9d1d9">Peer di rete</text>     <rect x="118" y="164" width="30"  height="15" rx="3" fill="#8b949e"/><text x="154" y="176" fill="#8b949e">5%</text>
+        </g>
+      </svg>
+    </div>
+    <div class="note">I pesi vengono <b>ricalibrati sulle sole metriche disponibili</b>: es. macOS non ha fail2ban → il suo peso viene ridistribuito sugli altri, così il confronto tra sistemi diversi resta equo.</div>
+
+    <div class="dwsec">3 · La baseline dinamica</div>
+    <p>Ogni metrica non si giudica con una soglia fissa, ma rispetto a <b>com'era normalmente quel server</b>. Calcoliamo la <b>mediana</b> (robusta agli outlier) su tre finestre — <b>1h / 6h / 24h</b> — e misuriamo di quanto il valore attuale la supera (<code>rapporto = attuale / baseline</code>).</p>
+    <div class="diagram">
+      <svg viewBox="0 0 400 120" role="img" aria-label="valore rispetto alla baseline con picco">
+        <rect x="10" y="70" width="380" height="16" fill="#16351f" opacity="0.7"/>
+        <line x1="10" y1="78" x2="300" y2="78" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="12" y="66" fill="#3fb950" font-size="10">baseline (mediana 1h/6h/24h)</text>
+        <polyline fill="none" stroke="#58a6ff" stroke-width="2"
+          points="10,80 60,78 110,81 160,77 210,79 250,76 285,74 300,40 320,20 340,30 365,55 390,72"/>
+        <circle cx="320" cy="20" r="3.5" fill="#f85149"/>
+        <text x="300" y="14" fill="#f85149" font-size="10" font-weight="700">picco = SAI ↑</text>
+      </svg>
+      <div class="wcap">Finché il valore resta dentro la banda → componente basso. Un picco ben oltre la baseline → componente (e SAI) sale.</div>
+    </div>
+
+    <div class="dwsec">4 · Gli stati e l'hysteresis</div>
+    <p>Dalla SAI e da alcune regole ricaviamo lo <b>stato</b> del server. Le soglie di <b>entrata</b> e <b>uscita</b> sono diverse, e per cambiare stato serve che la condizione duri <b>più campioni</b> (<b>hysteresis</b>): così lo stato non «sfarfalla» ogni 15 secondi.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 400 150" role="img" aria-label="macchina a stati SAI">
+        <rect x="18" y="58" width="96" height="34" rx="6" fill="#0f2417" stroke="#3fb950"/>
+        <text x="66" y="79" fill="#3fb950" font-size="11" font-weight="700" text-anchor="middle">NORMAL</text>
+        <rect x="152" y="58" width="96" height="34" rx="6" fill="#2a2410" stroke="#d29922"/>
+        <text x="200" y="79" fill="#d29922" font-size="11" font-weight="700" text-anchor="middle">ELEVATED</text>
+        <rect x="286" y="58" width="96" height="34" rx="6" fill="#2a1213" stroke="#f85149"/>
+        <text x="334" y="74" fill="#f85149" font-size="11" font-weight="700" text-anchor="middle">ACTIVE</text>
+        <text x="334" y="87" fill="#f85149" font-size="9" text-anchor="middle">ATTACK</text>
+        <line x1="114" y1="68" x2="150" y2="68" stroke="#8b949e" marker-end="url(#ah)"/>
+        <text x="132" y="52" fill="#8b949e" font-size="9" text-anchor="middle">SAI≥40</text>
+        <line x1="150" y1="84" x2="114" y2="84" stroke="#6e7681" marker-end="url(#ah)"/>
+        <text x="132" y="99" fill="#6e7681" font-size="9" text-anchor="middle">&lt;30 ×3</text>
+        <line x1="248" y1="68" x2="284" y2="68" stroke="#8b949e" marker-end="url(#ah)"/>
+        <text x="266" y="52" fill="#8b949e" font-size="9" text-anchor="middle">SAI≥75</text>
+        <line x1="284" y1="84" x2="250" y2="84" stroke="#6e7681" marker-end="url(#ah)"/>
+        <text x="266" y="99" fill="#6e7681" font-size="9" text-anchor="middle">&lt;60 ×4</text>
+        <text x="200" y="128" fill="#8b949e" font-size="9.5" text-anchor="middle">ACTIVE richiede SAI alta E una regola composita (non basta il numero)</text>
+        <defs><marker id="ah" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#8b949e"/></marker></defs>
+      </svg>
+    </div>
+    <p><span class="pill normal">NORMAL</span> nella norma · <span class="pill elev">ELEVATED</span> attività sopra baseline, da osservare · <span class="pill att">ACTIVE ATTACK</span> SAI alta + pattern d'attacco confermato · <span class="pill unk">UNKNOWN</span> telemetria insufficiente (host nuovo o senza dati).</p>
+
+    <div class="dwsec">5 · Quali controlli/test facciamo</div>
+    <p><b>Telemetria continua</b> — la sonda <b>read-only</b> gira ogni <b>15s</b> su ogni server e raccoglie (nessun agente installato):</p>
+    <ul>
+      <li><b>Firewall</b>: pacchetti bloccati/min (iptables/ip6tables/ufw, incluso Docker).</li>
+      <li><b>SSH falliti/h</b> e <b>SSH invalidi/h</b>: tentativi che <b>raggiungono</b> sshd (dal journal).</li>
+      <li><b>fail2ban</b>: IP attualmente bannati.</li>
+      <li><b>Porte in ascolto</b> e <b>peer di rete</b> (chi si connette, in/out).</li>
+    </ul>
+    <p><b>Regole composite «ACTIVE ATTACK»</b> — oltre alla SAI, scattano solo su pattern concreti:</p>
+    <div class="kbox">
+      <span class="op">ssh_attack</span> = SSH falliti ≥30/h <b>e</b> SSH invalidi ≥3/h<br>
+      <span class="op">bruteforce</span> = SSH falliti ≥30/h <b>e</b> almeno 1 IP bannato<br>
+      <span class="op">fw_attack</span>&nbsp; = firewall ≥100 drop/min <b>e</b> peer anomalo
+    </div>
+    <p><b>Rilevatori di cambiamento</b> (alimentano il feed «Security Changes»):</p>
+    <ul>
+      <li><b>Nuove porte</b> in ascolto — quelle <b>sensibili</b> (DB, Docker API, ecc.) evidenziate.</li>
+      <li><b>Peer anomali</b> — IP nuovi o rari che aprono connessioni.</li>
+      <li><b>Spike</b> — metrica oltre <b>×3</b> la baseline.</li>
+    </ul>
+    <p><b>Scansione nmap</b> (separata dalla SAI, periodica + on-demand): porte/servizi/OS e <b>correlazione CVE</b> → alimenta l'anello <b>CVE</b> sulla card e il drawer <b>📊 Status</b>.</p>
+    <div class="note">Il motore SAI è codice puro e <b>coperto da 52 test automatici</b> (<code>sai_engine.py</code> + <code>tests/</code>): baseline, pesi, normalizzazione, stati e hysteresis sono verificati a ogni build. La <b>sonda resta invariata e read-only</b>: tutta l'intelligenza è lato collector.</div>
+
+    <div class="dwsec">6 · Legenda della card server</div>
+    <div class="diagram">
+      <svg viewBox="0 0 400 250" role="img" aria-label="wireframe card server">
+        <rect x="14" y="10" width="230" height="230" rx="10" fill="#161b22" stroke="#30363d"/>
+        <circle cx="30" cy="34" r="5" fill="#3fb950"/>
+        <text x="42" y="38" fill="#e6edf3" font-size="12" font-weight="700">srv3</text>
+        <circle cx="222" cy="34" r="17" fill="none" stroke="#f85149" stroke-width="3"/>
+        <text x="222" y="31" fill="#e6edf3" font-size="8" text-anchor="middle">16</text>
+        <text x="222" y="40" fill="#8b949e" font-size="6" text-anchor="middle">CVE</text>
+        <text x="30" y="58" fill="#8b949e" font-size="8">host · 12s fa</text>
+        <rect x="28" y="66" width="60" height="20" rx="5" fill="#0d1117" stroke="#30363d"/>
+        <text x="58" y="80" fill="#8b949e" font-size="8" text-anchor="middle">📊 Status</text>
+        <rect x="92" y="66" width="60" height="20" rx="5" fill="#0d1117" stroke="#30363d"/>
+        <text x="122" y="80" fill="#8b949e" font-size="8" text-anchor="middle">🐳 8/8</text>
+        <rect x="156" y="66" width="72" height="20" rx="5" fill="#0d1117" stroke="#30363d"/>
+        <text x="192" y="80" fill="#8b949e" font-size="8" text-anchor="middle">in grafico</text>
+        <text x="30" y="108" fill="#8b949e" font-size="8">RAM</text>
+        <rect x="28" y="112" width="90" height="6" rx="3" fill="#21262d"/><rect x="28" y="112" width="55" height="6" rx="3" fill="#3fb950"/>
+        <text x="132" y="108" fill="#8b949e" font-size="8">Disco</text>
+        <rect x="130" y="112" width="90" height="6" rx="3" fill="#21262d"/><rect x="130" y="112" width="40" height="6" rx="3" fill="#3fb950"/>
+        <text x="30" y="142" fill="#8b949e" font-size="8">Rete ↓ RX</text>
+        <text x="30" y="156" fill="#39d0d8" font-size="11" font-weight="700">1.2 MB/s <tspan fill="#f85149">⚡</tspan></text>
+        <text x="132" y="142" fill="#8b949e" font-size="8">Rete ↑ TX</text>
+        <text x="132" y="156" fill="#a371f7" font-size="11" font-weight="700">340 KB/s <tspan fill="#3fb950">⚡</tspan></text>
+        <text x="30" y="184" fill="#8b949e" font-size="8">Disco (dettaglio)</text>
+        <rect x="28" y="190" width="192" height="6" rx="3" fill="#21262d"/><rect x="28" y="190" width="120" height="6" rx="3" fill="#d29922"/>
+        <!-- callout numbers -->
+        <g font-size="10" font-weight="700">
+          <circle cx="30" cy="34" r="0"/>
+          <text x="262" y="30" fill="#58a6ff">① semaforo stato host</text>
+          <text x="262" y="52" fill="#58a6ff">② anello CVE (nmap)</text>
+          <text x="262" y="80" fill="#58a6ff">③ Status / Docker / toggle</text>
+          <text x="262" y="116" fill="#58a6ff">④ RAM · Disco</text>
+          <text x="262" y="150" fill="#58a6ff">⑤ RX/TX + fulmine trend</text>
+          <text x="262" y="194" fill="#58a6ff">⑥ dischi in dettaglio</text>
+        </g>
+      </svg>
+    </div>
+    <ul>
+      <li class="num"><span class="n">1</span><b>Semaforo host</b>: verde=ok, giallo=dati vecchi, rosso=irraggiungibile/errore.</li>
+      <li class="num"><span class="n">2</span><b>Anello CVE</b> (clic → 📊 Status): rosso=exploit/critiche, ambra=gravi o CVE da rivedere, verde=nessuna, grigio=mai scansionato.</li>
+      <li class="num"><span class="n">3</span><b>Status</b> (scan nmap) · <b>🐳 Docker</b> con semaforo RAG e <code>attivi/totali</code> (clic → dashboard Docker) · <b>in grafico</b> (includi/escludi l'host dalle strip).</li>
+      <li class="num"><span class="n">4</span><b>RAM · Disco</b> con barre a soglia (verde/giallo/rosso a 60/85%).</li>
+      <li class="num"><span class="n">5</span><b>Rete RX</b> (ciano) e <b>TX</b> (viola) con il <b>fulmine trend</b>: 🟢 in calo · 🔴 in aumento · 🟡 stabile · ⚪ traffico minimo.</li>
+      <li class="num"><span class="n">6</span><b>Dischi in dettaglio</b> per ciascun filesystem.</li>
+    </ul>
+
+    <div class="dwsec">7 · La dashboard «Sicurezza» (SAD)</div>
+    <ul>
+      <li><b>Barra KPI</b>: sintesi flotta (server in NORMAL/ELEVATED/ACTIVE, SAI massima, eventi recenti).</li>
+      <li><b>Righe per server</b>: SAI corrente, stato e <b>sparkline</b> dell'andamento; <b>clic → drawer</b> di dettaglio.</li>
+      <li><b>Security Changes</b>: feed deduplicato di porte nuove, peer anomali e spike, filtrabile.</li>
+      <li><b>Drawer di drill-down</b>: porte in ascolto <b>vs</b> raggiungibili da nmap, peer, eventi e timeline SAI dell'host.</li>
+    </ul>
+    <div class="note">Tutto è <b>100% on-premise</b> e senza dipendenze esterne: nessun dato lascia la tua rete (l'unica eccezione, disattivabile, è la correlazione CVE via <code>vulners</code> durante lo scan nmap).</div>
+
   </div>
 </aside>
 
@@ -1880,6 +2071,19 @@ function closeUsers(){
   pwFor=null;
 }
 
+// drawer Guida (contenuto statico: SAI, controlli, legenda)
+function openGuide(){
+  document.getElementById("guideOvl").classList.add("on");
+  const d=document.getElementById("guideDrawer");
+  d.classList.add("on"); d.setAttribute("aria-hidden","false");
+  d.querySelector(".dwbody").scrollTop=0;
+}
+function closeGuide(){
+  document.getElementById("guideOvl").classList.remove("on");
+  const d=document.getElementById("guideDrawer");
+  d.classList.remove("on"); d.setAttribute("aria-hidden","true");
+}
+
 async function loadUsersDrawer(){
   try{
     const r=await fetch("/api/users");
@@ -2020,6 +2224,9 @@ document.getElementById("logout").onclick=doLogout;
 document.getElementById("usersBtn").onclick=openUsers;
 document.getElementById("usrX").onclick=closeUsers;
 document.getElementById("usrOvl").onclick=closeUsers;
+document.getElementById("guideBtn").onclick=openGuide;
+document.getElementById("guideX").onclick=closeGuide;
+document.getElementById("guideOvl").onclick=closeGuide;
 document.getElementById("nuCreate").onclick=createUser;
 document.getElementById("scanX").onclick=closeScan;
 document.getElementById("scanOvl").onclick=closeScan;
