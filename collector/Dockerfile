@@ -8,7 +8,7 @@ RUN apt-get update \
 
 WORKDIR /app
 # monitor-probe.py serve al collector per l'auto-install (endpoint /api/enroll)
-COPY app.py dashboard.html login.html monitor-probe.py monitor-probe-macos.py /app/
+COPY app.py sai_engine.py dashboard.html login.html monitor-probe.py monitor-probe-macos.py /app/
 
 # nessuna dipendenza pip: tutto stdlib
 EXPOSE 8888
