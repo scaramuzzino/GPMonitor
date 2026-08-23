@@ -27,7 +27,7 @@ import io, tarfile
 VERSION = "v3.0"
 BUILD_DATE = "2026-08-23 16:10"
 AUTHOR = "Stefano Scaramuzzino"
-REPORT_EMAIL = os.environ.get("MON_REPORT_EMAIL", "stefano.scaramuzzino@gmail.com")
+REPORT_EMAIL = os.environ.get("MON_REPORT_EMAIL", "")
 
 # ---- template per il pacchetto di deploy scaricabile (GET /api/deploy) ----
 DEPLOY_DOCKERFILE = """FROM python:3.12-slim
@@ -50,16 +50,17 @@ services:
     restart: unless-stopped
     cap_add: [NET_RAW, NET_ADMIN]
     environment:
-      # nome=utente@ip per ogni server da monitorare (IP Tailscale consigliati)
-      MON_HOSTS: "SRV1=root@100.0.0.1,SRV2=user@100.0.0.2"
-      # la web ascolta SOLO su questo indirizzo: metti l'IP (Tailscale) di QUESTA macchina
+      # nome=utente@host per ogni server da monitorare (host = IP o hostname raggiungibile in SSH)
+      MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2"
+      # indirizzo:porta su cui esporre la web. Tienila su rete fidata (loopback/VPN/Tailscale),
+      # NON esporla direttamente su internet (0.0.0.0 su IP pubblico e' sconsigliato).
       MON_BIND: "127.0.0.1:8888"
       MON_INTERVAL: "15"
       MON_RETENTION_HOURS: "48"
       MON_NMAP: "1"
       MON_NMAP_DEEP: "0"
       MON_NMAP_VULN: "0"
-      MON_REPORT_EMAIL: "tuo@email"
+      MON_REPORT_EMAIL: ""
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:
@@ -106,8 +107,8 @@ Monitoraggio **agentless** (nessun agente installato sui target: solo la sonda v
 1. Estrai l'archivio ed entra nella cartella:  `tar xzf gpmonitor-deploy.tar.gz && cd gpmonitor`
 2. Lancia:  `./install.sh`  (installa Docker se manca, genera la chiave, fa `docker compose up -d --build`)
 3. Modifica `collector/docker-compose.yml`:
-   - `MON_HOSTS`: elenco `nome=utente@ip` dei server (IP Tailscale consigliati)
-   - `MON_BIND`: l'IP su cui esporre la web (metti l'IP Tailscale di questa macchina, mai 0.0.0.0 su reti non fidate)
+   - `MON_HOSTS`: elenco `nome=utente@host` dei server (host = IP o hostname; VPN/Tailscale consigliati ma non obbligatori)
+   - `MON_BIND`: indirizzo:porta su cui esporre la web. Tienila su rete fidata (loopback/VPN); non esporla su internet
    - `MON_REPORT_EMAIL`: destinatario di report/avvisi (poi modificabile anche da Config)
 4. Applica:  `cd collector && docker compose up -d`
 
@@ -125,7 +126,7 @@ Apri `http://<MON_BIND>` : il **primo utente** che si registra diventa admin.
 
 # ---------------------------------------------------------------- config
 def parse_hosts(spec):
-    # "srv1=root@10.0.0.1,srv2=user@10.0.0.2,srv3=root@10.0.0.3"
+    # formato: "nome1=utente@host1,nome2=utente@host2" (host = IP o hostname raggiungibile in SSH)
     hosts = []
     for chunk in spec.split(","):
         chunk = chunk.strip()
@@ -136,11 +137,8 @@ def parse_hosts(spec):
     return hosts
 
 
-ENV_HOSTS = parse_hosts(os.environ.get(
-    "MON_HOSTS",
-    "srv1=root@10.0.0.1,srv2=user@10.0.0.2,srv3=root@10.0.0.3",
-))
-BIND = os.environ.get("MON_BIND", "10.0.0.2:8888")
+ENV_HOSTS = parse_hosts(os.environ.get("MON_HOSTS", ""))
+BIND = os.environ.get("MON_BIND", "127.0.0.1:8888")
 INTERVAL = int(os.environ.get("MON_INTERVAL", "15"))
 RETENTION_H = int(os.environ.get("MON_RETENTION_HOURS", "48"))
 SSH_KEY = os.environ.get("MON_SSH_KEY", "/app/ssh/monitor_ed25519")

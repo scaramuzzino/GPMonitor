@@ -5,7 +5,7 @@ services:
     build: .
     image: gpmon:latest
     container_name: gpmon
-    # host network: così il container raggiunge gli IP Tailscale 100.x come l'host
+    # host network: il container raggiunge i target con gli IP/rotte dell'host
     network_mode: host
     restart: unless-stopped
     # NET_RAW/NET_ADMIN: servono a nmap per SYN scan (-sS) e OS detection (-O)
@@ -13,23 +13,27 @@ services:
       - NET_RAW
       - NET_ADMIN
     environment:
-      # nome=utente@ip-tailscale — srv2 entra come user (sudo NOPASSWD -> sonda)
-      MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2,srv3=root@10.0.0.3"
-      # la web ascolta SOLO sull'IP Tailscale di srv2 -> mai esposta su eth0/pubblico
-      MON_BIND: "10.0.0.2:8888"
+      # nome=utente@host per ogni server da monitorare (host = IP o hostname raggiungibile in SSH).
+      # Puoi anche lasciarlo vuoto e aggiungere i server dalla dashboard (Config).
+      MON_HOSTS: "srv1=root@10.0.0.1,srv2=user@10.0.0.2"
+      # indirizzo:porta su cui esporre la web. Tienila su rete fidata (loopback/VPN/Tailscale):
+      # NON esporla direttamente su internet (evita 0.0.0.0 su IP pubblici).
+      MON_BIND: "127.0.0.1:8888"
       MON_INTERVAL: "15"
       MON_RETENTION_HOURS: "48"
-      # scansione nmap (agentless): rescan automatico ogni 6h + on-demand dal drawer
+      # scansione nmap (agentless): rescan automatico + on-demand dal drawer
       MON_NMAP: "1"
       MON_NMAP_INTERVAL_HOURS: "6"
       MON_NMAP_TOP_PORTS: "1000"
-      # profondità piena: -p- (tutte le 65535 porte)
-      MON_NMAP_DEEP: "1"
-      # correlazione CVE via NSE vulners (CPE->CVE). NB: interroga vulners.com (non on-premise).
-      # È il seed iniziale: poi il toggle vive in Config e viene persistito in kv['nmap_vuln'].
-      MON_NMAP_VULN: "1"
+      # profondità piena: -p- (tutte le 65535 porte). 0 = solo le top-ports.
+      MON_NMAP_DEEP: "0"
+      # correlazione CVE via NSE vulners (CPE->CVE). NB: interroga vulners.com (uscita internet):
+      # con 1 NON è più 100% on-premise. Toggle anche da Config, persistito in kv['nmap_vuln'].
+      MON_NMAP_VULN: "0"
       # tetto CVE per porta: 0 = nessun tetto (conteggi onesti)
       MON_NMAP_VULN_CAP: "0"
+      # destinatario di report/avvisi email (modificabile anche da Config)
+      MON_REPORT_EMAIL: ""
       MON_SSH_KEY: "/app/ssh/monitor_ed25519"
       MON_DATA_DIR: "/app/data"
     volumes:
