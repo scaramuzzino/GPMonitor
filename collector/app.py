@@ -820,10 +820,11 @@ def security_analyze(name, data):
         now = int(data.get("ts") or time.time())
         # ultime 24h di metriche per le baseline
         with db() as c:
-            rows = c.execute(
+            # dict (non sqlite3.Row): sai_engine.baseline_values usa r.get(field)
+            rows = [dict(r) for r in c.execute(
                 "SELECT ts, fw_drop_rate, ssh_failed_1h, ssh_invalid_1h, f2b_banned "
                 "FROM metrics WHERE host=? AND ts>=? ORDER BY ts",
-                (name, now - 86400)).fetchall()
+                (name, now - 86400)).fetchall()]
         components = _sai_components(name, data, rows)
         sai, weights = _sai_score(components)
         raw = components["_raw"]

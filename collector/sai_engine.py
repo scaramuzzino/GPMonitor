@@ -171,6 +171,11 @@ def classify_state(prev_state, sai, raw, state_obj, hysteresis=None, thresholds=
         elif sai >= hy["attack_enter"] and composite_attack:
             new_state = "active_attack"
             below = 0
+        else:
+            # SAI basso con dati disponibili -> NORMAL (esce da 'unknown';
+            # gli host senza telemetria non arrivano qui: restano 'unknown' nel collector)
+            new_state = "normal"
+            below = 0
     state_obj["state"] = new_state
     state_obj["sai"] = sai
     state_obj["below_count"] = below
