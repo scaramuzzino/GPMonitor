@@ -31,9 +31,12 @@ auto-ban degli scanner.
   `monitor-probe-macos.py` per macOS), scelta in base al sistema. Mai un agente compilato.
 - **On-premise / stdlib**: nessuna dipendenza esterna, nessun traffico verso il cloud
   (unica eccezione opzionale e disattivabile: la correlazione CVE via `vulners`, vedi sotto).
-- **Dashboard web** (SVG vanilla): card per host (RAM/disco, **throughput di rete realtime**),
-  Security Activity Dashboard con SAI e timeline, Sankey dei flussi di rete, dashboard Docker
-  per server in stile Grafana, KPI di sicurezza RAG, drawer di scansione nmap con CVE e remediation.
+- **Dashboard web** (SVG vanilla): card per host (RAM/disco, **throughput di rete realtime** RX/TX
+  con colori distinti e **indicatore di trend**), Security Activity Dashboard con SAI e timeline,
+  Sankey dei flussi di rete, dashboard Docker per server in stile Grafana, KPI di sicurezza RAG,
+  drawer di scansione nmap con CVE e remediation.
+- **Guida integrata**: drawer **❓ Guida** in-app con diagrammi SVG che spiega cos'è la SAI, come si
+  calcola, la baseline, gli stati, quali controlli/test vengono fatti e la legenda delle card.
 - **Security Activity Dashboard**: SAI (Security Activity Index 0–100), stati NORMAL/ELEVATED/
   ACTIVE_ATTACK/UNKNOWN con hysteresis, timeline SAI per server, Security Changes feed
   deduplicato, correlazione listening vs nmap reachable, drawer di drill-down. Tutto
@@ -43,6 +46,8 @@ auto-ban degli scanner.
 - **Report & Avvisi via email**: report giornaliero HTML (tabelle, badge RAG, grafici a barre) e
   watchdog che avvisa su problemi gravi. Destinatario configurabile dalla dashboard.
 - **Auto-ban** degli scanner aggressivi (fail2ban) con whitelist blindata.
+- **Backup del database**: script di backup **online** SQLite (coerente anche sotto scrittura) con
+  rotazione — `collector/tools/db-backup.py`, adatto a un cron giornaliero.
 - **Installazione da git**: `git clone` + `./install.sh` (o `docker compose up -d --build`) —
   semplice e diretto, come qualsiasi progetto Docker.
 
@@ -57,7 +62,7 @@ auto-ban degli scanner.
    │   • poller ogni 15s: ssh -> monitor-probe.py  (JSON)   │
    │   • rate calcolati diffando i contatori                │
    │   • SAI engine: baseline + state + event detection     │
-   │   • SQLite (retention 48h): metrics, scans, users, kv  │
+   │   • SQLite WAL (retention configurabile, default 48h)  │
    │     + security_events, security_peers, security_ports  │
    │   • nmap (dal container) verso i target                │
    │   • web http://<MON_BIND>:8888  (solo su rete fidata)   │
@@ -111,6 +116,7 @@ Componenti (cartella `collector/`):
 | `monitor-probe.py` | Sonda **Linux** (JSON): RAM (`/proc/meminfo`), disco (`findmnt`), rete (`/proc/net/dev`), conn (`ss`), docker (`docker ps/stats`), sicurezza (drop iptables/ip6tables, SSH da journal, fail2ban, porte). |
 | `monitor-probe-macos.py` | Sonda **macOS** (stesso schema JSON): `sysctl`/`vm_stat`, `df`, `netstat`. |
 | `tests/test_security.py` | Test unittest stdlib del SAI engine (52 test). |
+| `tools/db-backup.py` | Backup online SQLite con rotazione (percorsi/ritenzione via env). |
 | `Dockerfile`, `docker-compose.yml` | Build ed esecuzione del container. |
 
 Storage SQLite (`data/metrics.db`):
@@ -311,8 +317,9 @@ La config sta in `collector/.env` (copia da `.env.example`); la compose la legge
 | `MON_HOSTS` | `nome=utente@host` separati da virgola (host = IP o hostname raggiungibile in SSH). |
 | `MON_BIND` | Indirizzo:porta di ascolto della web. Mettilo su **rete fidata** (loopback/VPN); evita `0.0.0.0` su IP pubblici. |
 | `MON_INTERVAL` | Secondi tra un poll e l'altro (default 15). |
-| `MON_RETENTION_HOURS` | Retention delle metriche (default 48). |
-| `MON_SECURITY_RETENTION_HOURS` | Retention degli eventi security (default 48). |
+| `MON_RETENTION_HOURS` | Retention delle metriche in ore (default 48; alza per più storico, es. `360` = 15 giorni). |
+| `MON_SECURITY_RETENTION_HOURS` | Retention degli eventi security in ore (default 48). |
+| `MON_PRUNE_EVERY_S` | Intervallo minimo tra due prune di retention (default 600s): evita di tenere un write-lock a ogni insert. |
 | `MON_NMAP` | Abilita la scansione nmap (porte/servizi/OS). |
 | `MON_NMAP_DEEP` | `1` = tutte le 65535 porte (`-p-`); `0` = top-1000. |
 | `MON_NMAP_VULN` | `1` = correlazione CVE via NSE `vulners`. ⚠ interroga internet: NON più 100% on-premise (toggle anche in Config, persistito in `kv`). |
@@ -485,6 +492,33 @@ Jail fail2ban che legge i blocchi del firewall e banna gli IP che superano una s
 pacchetti bloccati, con **escalation** per i recidivi e **whitelist** blindata (loopback, reti
 private, Tailscale, Docker, IP admin). Si banna solo ciò che è già bloccato dal firewall: il
 traffico legittimo non è mai candidato.
+
+---
+
+## Backup del database
+
+Lo storico vive in un unico file SQLite (`data/metrics.db`). Il DB gira in **WAL mode**
+(`journal_mode=WAL`): reader concorrenti e un writer non si bloccano a vicenda — utile con
+retention lunghe e poll paralleli. Per i backup usa `collector/tools/db-backup.py`, che sfrutta
+l'**API di backup online** di SQLite (copia coerente anche mentre il collector scrive) e ruota i
+file gzippati:
+
+```bash
+# backup manuale (dalla cartella collector)
+GPMON_DB=data/metrics.db python3 tools/db-backup.py
+
+# cron giornaliero (03:30), tenendo gli ultimi 15 backup
+30 3 * * *  GPMON_DB=/opt/gpmonitor/collector/data/metrics.db \
+            GPMON_BACKUP_DIR=/opt/gpmonitor/collector/backups \
+            GPMON_BACKUP_KEEP=15 \
+            /usr/bin/python3 /opt/gpmonitor/collector/tools/db-backup.py >> /var/log/gpmon-backup.log 2>&1
+```
+
+| Variabile | Significato |
+|---|---|
+| `GPMON_DB` | Percorso del DB (default `./data/metrics.db`). |
+| `GPMON_BACKUP_DIR` | Cartella dei backup (default `./backups`). |
+| `GPMON_BACKUP_KEEP` | Quanti backup giornalieri conservare (default 15). |
 
 ---
 
