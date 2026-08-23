@@ -372,9 +372,11 @@ def _shq(s):
 
 
 def db():
-    conn = sqlite3.connect(DB_PATH, timeout=5.0)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout=5000")  # scritture concorrenti (poll parallelo)
+    conn.execute("PRAGMA busy_timeout=10000")  # attende invece di fallire con 'database is locked'
+    conn.execute("PRAGMA journal_mode=WAL")    # reader concorrenti + 1 writer: niente lock reciproco
+    conn.execute("PRAGMA synchronous=NORMAL")  # sicuro con WAL, molti meno fsync
     return conn
 
 
@@ -532,6 +534,13 @@ def enrich(name, data):
     return data
 
 
+# prune diradato: il DELETE di retention NON gira a ogni insert (4 host × ogni
+# 15s) ma al massimo ogni PRUNE_EVERY_S, per non tenere un write-lock inutile
+# (con DB grande da 15gg era una causa di 'database is locked').
+PRUNE_EVERY_S = int(os.environ.get("MON_PRUNE_EVERY_S", "600"))
+_last_prune = 0.0
+
+
 def persist(name, data):
     disks = data.get("disk") or []
     root = next((d for d in disks if d["target"] == "/"), (disks[0] if disks else None))
@@ -573,16 +582,24 @@ def persist(name, data):
 
 
 def _poll_host(name, target):
+    # 1) raccolta dato (fatale: se fallisce la sonda, la card va in errore)
     try:
         data = ssh_probe(target)
         data = enrich(name, data)
-        with _lock:
-            _latest[name] = data
-        persist(name, data)
-        security_analyze(name, data)   # Security Activity Dashboard (collector-side)
     except Exception as e:
         with _lock:
             _latest[name] = {"name": name, "error": str(e), "ts": int(time.time())}
+        return
+    # 2) pubblica SUBITO il dato buono (RAM/disco/rete/docker visibili)
+    with _lock:
+        _latest[name] = data
+    # 3) persistenza + analisi: best-effort, NON devono MAI declassare la card a
+    #    errore (un lock DB transitorio non deve far "sparire" Docker dalla card).
+    try:
+        persist(name, data)
+        security_analyze(name, data)   # Security Activity Dashboard (collector-side)
+    except Exception as e:
+        print(f"[persist/analyze] {name}: {e}", flush=True)
 
 
 # ---------------------------------------------------------------- Security Activity Index (SAI) engine
