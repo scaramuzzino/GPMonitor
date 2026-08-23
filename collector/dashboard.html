@@ -191,8 +191,6 @@
   .cfgset .st{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
   .emlrow{display:flex;gap:6px;align-items:center}
   .emlrow input{min-width:190px;background:#0d1117;border:1px solid var(--line);color:var(--fg);border-radius:7px;padding:5px 9px;font-size:12.5px}
-  .dlbtn{display:inline-block;padding:6px 13px;background:var(--accent);color:#fff;border-radius:7px;text-decoration:none;font-size:12.5px;font-weight:600;white-space:nowrap}
-  .dlbtn:hover{filter:brightness(1.12)}
   .setrow{display:flex;align-items:flex-start;gap:12px;padding:6px 0}
   .setrow .txt{flex:1}
   .setrow .txt b{font-size:13px}
@@ -1470,14 +1468,6 @@ async function loadSettings(){
         <div class="emlrow"><input id="repEmail" value="${escapeHtml(s.report_email||"")}" placeholder="tuo@email">
           <button id="repEmailSave">Salva</button></div>
       </div></div>`;
-    // Installazione: download deploy
-    html+=`<div class="cfgset"><div class="st">Installazione</div>
-      <div class="setrow">
-        <div class="txt"><b>Deploy Docker</b>
-          <small>Scarica il pacchetto per installare GPMonitor su un'altra macchina
-          (Dockerfile + compose + <code>install.sh</code>, semplice e diretto).</small></div>
-        <a class="dlbtn" href="/api/deploy" download>⬇ Scarica deploy</a>
-      </div></div>`;
     // Scansione nmap (solo se abilitata)
     if(s.nmap_enabled){
       html+=`<div class="cfgset"><div class="st">Scansione nmap</div>
@@ -1982,7 +1972,7 @@ function copyRaw(text){
 }
 async function copyClip(text){
   try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
-  return copyRaw(text);   // http (Tailscale) non è secure context -> fallback execCommand
+  return copyRaw(text);   // http non è secure context -> fallback execCommand
 }
 function openCopy(title, text){
   document.getElementById("copyTitle").textContent=title;
