@@ -216,6 +216,7 @@
 
   /* ---- Sankey flussi di rete ---- */
   .flowbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .flowbar .flowhint{color:var(--mut);font-size:10.5px;letter-spacing:.2px}
   .flowtabs{display:flex;gap:6px;flex-wrap:wrap}
   .snk{width:100%;overflow-x:auto}
   .snk svg{display:block}
@@ -458,6 +459,7 @@
     <div class="panel-head">
       <h3>Flussi di rete — chi comunica con chi</h3>
       <div class="flowbar">
+        <span class="flowhint">server (multi):</span>
         <div class="flowtabs" id="flowHosts"></div>
         <div class="toggles" id="flowDir"></div>
       </div>
@@ -572,7 +574,7 @@ function toggleHost(h){ DISABLED.has(h)?DISABLED.delete(h):DISABLED.add(h); save
 let dockSort = {key:"sev", dir:1};   // sev|name|cpu|mem ; dir 1=asc -1=desc
 
 // flussi di rete (Sankey): server selezionato + direzioni attive (multi-selezione)
-let flowHost = null;        // nome host selezionato (default: primo)
+let flowHosts = [];         // server selezionati (multiselezione; vuoto = tutti)
 let flowDirs = ["in"];      // sottoinsieme di ["in","out"]; entrambi = server al centro
 
 // nomi noti delle porte (per etichettare i flussi)
@@ -652,39 +654,53 @@ function drawChart(box, tip, series, valfmt){
 // ------------------------------------------------------------ Sankey flussi di rete
 const PORT_PAL = ["#58a6ff","#3fb950","#f0883e","#bc8cff","#f778ba","#39d0d8","#d29922","#ff7b72"];
 
-// aggrega una direzione: top 12 IP · 10 porte, solo i flussi tra quelli mostrati
-function sankeyDir(list){
+
+// aggrega una direzione su PIÙ server: top 12 IP · 10 porte globali; ogni flusso tiene l'host
+function sankeyDirMulti(entries, dir){
+  const all=[];
+  entries.forEach(e=>{ ((e.flows||{})[dir]||[]).forEach(f=>all.push({host:e.host, ip:f.ip, port:+f.port, n:f.n})); });
   const ipTot={}, portTot={};
-  (list||[]).forEach(f=>{ ipTot[f.ip]=(ipTot[f.ip]||0)+f.n; portTot[+f.port]=(portTot[+f.port]||0)+f.n; });
+  all.forEach(f=>{ ipTot[f.ip]=(ipTot[f.ip]||0)+f.n; portTot[f.port]=(portTot[f.port]||0)+f.n; });
   const ipKeep=new Set(Object.entries(ipTot).sort((a,b)=>b[1]-a[1]).slice(0,12).map(e=>e[0]));
   const portKeep=new Set(Object.entries(portTot).sort((a,b)=>b[1]-a[1]).slice(0,10).map(e=>+e[0]));
-  const shown=(list||[]).filter(f=>ipKeep.has(f.ip)&&portKeep.has(+f.port));
-  const ipVal={}, portVal={}; let total=0;
-  shown.forEach(f=>{ ipVal[f.ip]=(ipVal[f.ip]||0)+f.n; portVal[+f.port]=(portVal[+f.port]||0)+f.n; total+=f.n; });
-  return {shown, ipVal, portVal, total,
+  const shown=all.filter(f=>ipKeep.has(f.ip)&&portKeep.has(f.port));
+  const ipVal={}, portVal={}, hostVal={}; let total=0;
+  shown.forEach(f=>{ ipVal[f.ip]=(ipVal[f.ip]||0)+f.n; portVal[f.port]=(portVal[f.port]||0)+f.n;
+                     hostVal[f.host]=(hostVal[f.host]||0)+f.n; total+=f.n; });
+  return {shown, ipVal, portVal, hostVal, total,
           ips:Object.keys(ipVal).sort((a,b)=>ipVal[b]-ipVal[a]),
           ports:Object.keys(portVal).map(Number).sort((a,b)=>portVal[b]-portVal[a]),
           moreIp:Object.keys(ipTot).length-Object.keys(ipVal).length,
           morePort:Object.keys(portTot).length-Object.keys(portVal).length};
 }
 
-// flows: {in:[...],out:[...]} ; dirs: sottoinsieme di ["in","out"]
-// una direzione: IP → porte → server ; entrambe: IP → porte → SERVER → porte → IP
-function drawSankey(box, flows, hostName, dirs){
+// entries: [{host, flows:{in,out}}] (uno o più server) ; dirs: sottoinsieme di ["in","out"]
+// una direzione: IP → porte → SERVER(i) ; entrambe: IP → porte → SERVER(i) → porte → IP
+function drawSankey(box, entries, dirs){
   const empty = m => { box.innerHTML = `<div class="snk-empty">${m}</div>`; };
-  const din = dirs.includes("in")  ? sankeyDir((flows||{}).in)  : null;
-  const dout= dirs.includes("out") ? sankeyDir((flows||{}).out) : null;
+  entries=(entries||[]).filter(e=>e&&e.flows);
+  if(!entries.length) return empty("nessun server selezionato");
+  const din = dirs.includes("in")  ? sankeyDirMulti(entries,"in")  : null;
+  const dout= dirs.includes("out") ? sankeyDirMulti(entries,"out") : null;
   const hasIn = !!(din && din.shown.length), hasOut = !!(dout && dout.shown.length);
-  if(!hasIn && !hasOut) return empty("nessuna connessione da mostrare per le direzioni selezionate");
+  if(!hasIn && !hasOut) return empty("nessuna connessione da mostrare per i server/direzioni selezionati");
+
+  // nodi server: unione degli host presenti (ordinati per traffico); valore = max(in,out) nel caso bidirezionale
+  const srvHosts=[...new Set([...(hasIn?Object.keys(din.hostVal):[]), ...(hasOut?Object.keys(dout.hostVal):[])])];
+  const srvNodeVal=h=>{ const i=hasIn?(din.hostVal[h]||0):0, o=hasOut?(dout.hostVal[h]||0):0;
+    return (hasIn&&hasOut)?Math.max(i,o):(hasIn?i:o); };
+  srvHosts.sort((a,b)=>srvNodeVal(b)-srvNodeVal(a));
+  const multi=srvHosts.length>1;
+  const srvColTotal=srvHosts.reduce((s,h)=>s+srvNodeVal(h),0)||1;
 
   const nodeW=13, G=12, padT=28, padB=16, W=Math.max(680, box.clientWidth);
-  const counts=[1];
+  const colTotalMax=Math.max(hasIn?din.total:0, hasOut?dout.total:0, srvColTotal, 1);
+  const counts=[srvHosts.length||1];
   if(hasIn)  counts.push(din.ips.length, din.ports.length);
   if(hasOut) counts.push(dout.ips.length, dout.ports.length);
   const kmax=Math.max(...counts, 1);
-  const srvVal=Math.max(hasIn?din.total:0, hasOut?dout.total:0, 1);
   const availH=Math.max(160, kmax*30);
-  const scale=(availH-(kmax-1)*G)/srvVal;
+  const scale=(availH-(kmax-1)*G)/colTotalMax;
   const H=availH+padT+padB;
 
   // posizioni colonne (bordo sinistro del nodo)
@@ -703,6 +719,10 @@ function drawSankey(box, flows, hostName, dirs){
   const allPorts=[...new Set([...(hasIn?din.ports:[]), ...(hasOut?dout.ports:[])])];
   const portColor={}; allPorts.forEach((p,i)=>portColor[p]=PORT_PAL[i%PORT_PAL.length]);
 
+  const srvN=layout(srvHosts.map(h=>({key:h, val:srvNodeVal(h), label:h,
+      inv:hasIn?(din.hostVal[h]||0):0, outv:hasOut?(dout.hostVal[h]||0):0})), X.srv);
+  const srvMap={}; srvN.forEach((n,i)=>{n.idx=i; srvMap[n.key]=n;});
+
   let ipinN=[],portinN=[],ipoutN=[],portoutN=[];
   if(hasIn){
     ipinN=layout(din.ips.map(ip=>({key:ip,val:din.ipVal[ip],label:ip,sub:din.ipVal[ip]+" conn"})), X.ipin);
@@ -712,55 +732,68 @@ function drawSankey(box, flows, hostName, dirs){
     portoutN=layout(dout.ports.map(p=>({key:p,val:dout.portVal[p],label:portLabel(p),col:portColor[p]})), X.portout);
     ipoutN=layout(dout.ips.map(ip=>({key:ip,val:dout.ipVal[ip],label:ip,sub:dout.ipVal[ip]+" conn"})), X.ipout);
   }
-  const srvSub=(hasIn?din.total+" in":"")+(hasIn&&hasOut?" · ":"")+(hasOut?dout.total+" out":"");
-  const srvN=layout([{key:"srv",val:srvVal,label:hostName,sub:srvSub}], X.srv)[0];
-  const portinMap={}; portinN.forEach(n=>portinMap[n.key]=n);
   const ipinMap={}; ipinN.forEach((n,i)=>{n.idx=i; ipinMap[n.key]=n;});
-  const portinIdx={}; portinN.forEach((n,i)=>portinIdx[n.key]=i);
-  const portoutMap={}; portoutN.forEach(n=>portoutMap[n.key]=n);
+  const portinMap={}; portinN.forEach((n,i)=>{n.idx=i; portinMap[n.key]=n;});
   const ipoutMap={}; ipoutN.forEach((n,i)=>{n.idx=i; ipoutMap[n.key]=n;});
-  const portoutIdx={}; portoutN.forEach((n,i)=>portoutIdx[n.key]=i);
+  const portoutMap={}; portoutN.forEach((n,i)=>{n.idx=i; portoutMap[n.key]=n;});
 
   let ribbons="";
-  function ribbon(a,b,v,color){
+  function ribbon(a,b,v,color,lab){
     const L=a.x<b.x?a:b, R=a.x<b.x?b:a;
     const sx=L.x+nodeW, dx=R.x, mx=(sx+dx)/2;
     const sy0=L.outOff, sy1=L.outOff+v*scale; L.outOff=sy1;
     const dy0=R.inOff,  dy1=R.inOff +v*scale; R.inOff=dy1;
-    ribbons+=`<path d="M${sx.toFixed(1)},${sy0.toFixed(1)} C${mx.toFixed(1)},${sy0.toFixed(1)} ${mx.toFixed(1)},${dy0.toFixed(1)} ${dx.toFixed(1)},${dy0.toFixed(1)} L${dx.toFixed(1)},${dy1.toFixed(1)} C${mx.toFixed(1)},${dy1.toFixed(1)} ${mx.toFixed(1)},${sy1.toFixed(1)} ${sx.toFixed(1)},${sy1.toFixed(1)} Z" fill="${color}" fill-opacity=".30"><title>${escapeHtml(a.label)} → ${escapeHtml(b.label)} · ${v} conn</title></path>`;
+    ribbons+=`<path d="M${sx.toFixed(1)},${sy0.toFixed(1)} C${mx.toFixed(1)},${sy0.toFixed(1)} ${mx.toFixed(1)},${dy0.toFixed(1)} ${dx.toFixed(1)},${dy0.toFixed(1)} L${dx.toFixed(1)},${dy1.toFixed(1)} C${mx.toFixed(1)},${dy1.toFixed(1)} ${mx.toFixed(1)},${sy1.toFixed(1)} ${sx.toFixed(1)},${sy1.toFixed(1)} Z" fill="${color}" fill-opacity=".30"><title>${escapeHtml(lab)} · ${v} conn</title></path>`;
   }
+  function aggr(list, ka, kb){ const m={}; list.forEach(f=>{const k=f[ka]+"|"+f[kb]; m[k]=(m[k]||0)+f.n;});
+    return Object.keys(m).map(k=>{const p=k.split("|"); return {[ka]:p[0],[kb]:p[1],n:m[k]};}); }
   if(hasIn){
-    din.shown.slice().sort((x,y)=>(ipinMap[x.ip].idx-ipinMap[y.ip].idx)||(portinIdx[+x.port]-portinIdx[+y.port]))
-      .forEach(f=>ribbon(ipinMap[f.ip], portinMap[+f.port], f.n, portinMap[+f.port].col));
-    portinN.forEach(p=>ribbon(p, srvN, p.val, p.col));           // porte-in → server (lato sx)
+    // IP → porta (aggregato per ip,porta)
+    aggr(din.shown,"ip","port").map(f=>({ip:f.ip,port:+f.port,n:f.n}))
+      .sort((x,y)=>(ipinMap[x.ip].idx-ipinMap[y.ip].idx)||(portinMap[x.port].idx-portinMap[y.port].idx))
+      .forEach(f=>ribbon(ipinMap[f.ip], portinMap[f.port], f.n, portinMap[f.port].col, ipinMap[f.ip].label+" → "+portinMap[f.port].label));
+    // porta → server (aggregato per porta,host)
+    aggr(din.shown,"port","host").map(f=>({port:+f.port,host:f.host,n:f.n}))
+      .sort((x,y)=>(portinMap[x.port].idx-portinMap[y.port].idx)||(srvMap[x.host].idx-srvMap[y.host].idx))
+      .forEach(f=>ribbon(portinMap[f.port], srvMap[f.host], f.n, portinMap[f.port].col, portinMap[f.port].label+" → "+f.host));
   }
   if(hasOut){
-    portoutN.forEach(p=>ribbon(srvN, p, p.val, p.col));          // server (lato dx) → porte-out
-    dout.shown.slice().sort((x,y)=>(portoutIdx[+x.port]-portoutIdx[+y.port])||(ipoutMap[x.ip].idx-ipoutMap[y.ip].idx))
-      .forEach(f=>ribbon(portoutMap[+f.port], ipoutMap[f.ip], f.n, portoutMap[+f.port].col));
+    // server → porta (aggregato per host,porta)
+    aggr(dout.shown,"host","port").map(f=>({host:f.host,port:+f.port,n:f.n}))
+      .sort((x,y)=>(srvMap[x.host].idx-srvMap[y.host].idx)||(portoutMap[x.port].idx-portoutMap[y.port].idx))
+      .forEach(f=>ribbon(srvMap[f.host], portoutMap[f.port], f.n, portoutMap[f.port].col, f.host+" → "+portoutMap[f.port].label));
+    // porta → IP (aggregato per porta,ip)
+    aggr(dout.shown,"port","ip").map(f=>({port:+f.port,ip:f.ip,n:f.n}))
+      .sort((x,y)=>(portoutMap[x.port].idx-portoutMap[y.port].idx)||(ipoutMap[x.ip].idx-ipoutMap[y.ip].idx))
+      .forEach(f=>ribbon(portoutMap[f.port], ipoutMap[f.ip], f.n, portoutMap[f.port].col, portoutMap[f.port].label+" → "+ipoutMap[f.ip].label));
   }
 
-  function rect(n,col){ return `<rect x="${n.x}" y="${n.y0.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}" rx="2" fill="${col}"/>`; }
+  function rect(n,col,title){ return `<rect x="${n.x}" y="${n.y0.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}" rx="2" fill="${col}">${title?`<title>${escapeHtml(title)}</title>`:""}</rect>`; }
   const txt=(x,y,anc,cls,s,extra="")=>`<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${anc}" class="${cls}" ${extra}>${escapeHtml(s)}</text>`;
   let svg="";
   const cap=(x,t)=>`<text x="${x}" y="16" text-anchor="middle" class="col-cap">${t}</text>`;
   if(hasIn)  svg+=cap(X.ipin+nodeW/2,"IP remoti (in)")+cap(X.portin+nodeW/2,"porte in");
   if(hasOut) svg+=cap(X.portout+nodeW/2,"porte out")+cap(X.ipout+nodeW/2,"IP remoti (out)");
-  svg+=cap(X.srv+nodeW/2,"server");
+  svg+=cap(X.srv+nodeW/2, multi?("server ("+srvHosts.length+")"):"server");
   svg+=ribbons;
   ipinN.forEach(n=>{ const cy=n.y0+n.h/2; svg+=rect(n,"#6e7681")+txt(n.x-6,cy-1,"end","nlab",n.label)+txt(n.x-6,cy+10,"end","nsub",n.sub); });
   portinN.forEach(n=>{ svg+=rect(n,n.col)+txt(n.x+nodeW/2,n.y0-3,"middle","plab",n.label); });
   portoutN.forEach(n=>{ svg+=rect(n,n.col)+txt(n.x+nodeW/2,n.y0-3,"middle","plab",n.label); });
   ipoutN.forEach(n=>{ const cy=n.y0+n.h/2; svg+=rect(n,"#6e7681")+txt(n.x+nodeW+6,cy-1,"start","nlab",n.label)+txt(n.x+nodeW+6,cy+10,"start","nsub",n.sub); });
-  // server
-  svg+=rect(srvN,"var(--accent)");
-  if(hasIn && hasOut){
-    svg+=txt(X.srv+nodeW/2, srvN.y0-6, "middle", "nlab", hostName, 'style="font-weight:600"')
-       +txt(X.srv+nodeW/2, srvN.y0+srvN.h+12, "middle", "nsub", srvSub);
-  } else {
-    const hx = hasIn ? srvN.x+nodeW+6 : srvN.x-6, anc = hasIn ? "start" : "end", hcy=srvN.y0+srvN.h/2;
-    svg+=txt(hx,hcy-1,anc,"nlab",hostName,'style="font-weight:600"')+txt(hx,hcy+10,anc,"nsub",srvSub);
-  }
+  // server: uno o più nodi
+  srvN.forEach(n=>{
+    const sub=(n.inv?n.inv+" in":"")+(n.inv&&n.outv?" · ":"")+(n.outv?n.outv+" out":"");
+    svg+=rect(n,"var(--accent)", n.label+(sub?" · "+sub:""));
+    if(multi){
+      svg+=txt(n.x+nodeW/2, n.y0-3, "middle", "plab", n.label, 'style="font-weight:600;fill:var(--accent)"');
+    } else if(hasIn && hasOut){
+      svg+=txt(n.x+nodeW/2, n.y0-6, "middle", "nlab", n.label, 'style="font-weight:600"')
+         +txt(n.x+nodeW/2, n.y0+n.h+12, "middle", "nsub", sub);
+    } else {
+      const hx = hasIn ? n.x+nodeW+6 : n.x-6, anc = hasIn ? "start" : "end", hcy=n.y0+n.h/2;
+      svg+=txt(hx,hcy-1,anc,"nlab",n.label,'style="font-weight:600"')+txt(hx,hcy+10,anc,"nsub",sub);
+    }
+  });
   const moreIp=(hasIn?din.moreIp:0)+(hasOut?dout.moreIp:0), morePort=(hasIn?din.morePort:0)+(hasOut?dout.morePort:0);
   const note=(moreIp>0||morePort>0)?`<text x="${(W/2).toFixed(1)}" y="${H-2}" text-anchor="middle" class="nsub">mostrati i più attivi${moreIp>0?" · +"+moreIp+" IP":""}${morePort>0?" · +"+morePort+" porte":""}</text>`:"";
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H+(note?12:0)}" width="${W}" height="${H+(note?12:0)}">${svg}${note}</svg>`;
@@ -772,11 +805,14 @@ function renderFlow(){
   if(!hosts.length){ tabsEl.innerHTML=""; dirEl.innerHTML="";
     document.getElementById("flowSnk").innerHTML=`<div class="snk-empty">nessun dato di flusso (richiede la sonda v2: reinstallala dal pannello Config)</div>`;
     return; }
-  if(!flowHost || !hosts.includes(flowHost)) flowHost=hosts[0];
-  tabsEl.innerHTML=hosts.map(h=>`<span class="tg ${flowHost===h?'on':''}" data-flowhost="${escapeHtml(h)}">${escapeHtml(h)}</span>`).join("");
+  // tieni solo host validi; se vuota, seleziona tutti (multiselezione, default = tutti)
+  flowHosts=flowHosts.filter(h=>hosts.includes(h));
+  if(!flowHosts.length) flowHosts=hosts.slice();
+  tabsEl.innerHTML=hosts.map(h=>`<span class="tg ${flowHosts.includes(h)?'on':''}" data-flowhost="${escapeHtml(h)}">${escapeHtml(h)}</span>`).join("");
   dirEl.innerHTML=[["in","← in ingresso"],["out","in uscita →"]]
     .map(([k,l])=>`<span class="tg ${flowDirs.includes(k)?'on':''}" data-flowdir="${k}">${l}</span>`).join("");
-  drawSankey(document.getElementById("flowSnk"), (LATEST[flowHost]||{}).flows||{}, flowHost, flowDirs);
+  const entries=flowHosts.map(h=>({host:h, flows:(LATEST[h]||{}).flows||{}}));
+  drawSankey(document.getElementById("flowSnk"), entries, flowDirs);
 }
 
 // gauge semicircolare (stile Grafana) per l'overview Docker
@@ -1077,7 +1113,10 @@ document.addEventListener("click", e=>{
   else if(t.dataset.upw){ pwFor = pwFor===t.dataset.upw ? null : t.dataset.upw; usrMsg(""); loadUsersDrawer(); }
   else if(t.dataset.upwsave){ submitPw(t.dataset.upwsave); }
   else if(t.dataset.upwcancel){ pwFor=null; loadUsersDrawer(); }
-  else if(t.dataset.flowhost){ flowHost=t.dataset.flowhost; renderFlow(); }
+  else if(t.dataset.flowhost){ const k=t.dataset.flowhost;   // multiselezione: toggle, resta ≥1
+    if(flowHosts.includes(k)){ if(flowHosts.length>1) flowHosts=flowHosts.filter(x=>x!==k); }
+    else flowHosts=[...flowHosts,k];
+    renderFlow(); }
   else if(t.dataset.flowdir){ const k=t.dataset.flowdir;
     if(flowDirs.includes(k)){ if(flowDirs.length>1) flowDirs=flowDirs.filter(x=>x!==k); }  // resta ≥1
     else flowDirs=[...flowDirs,k];
