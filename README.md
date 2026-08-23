@@ -478,6 +478,27 @@ TCP/443
 CVE assenti (vulners disattivato) e scan non effettuato sono distinti:
 **"N/A" ≠ "0 CVE"**.
 
+### Backport-aware (CVE) — niente falsi allarmi
+
+`vulners` correla i CVE sulla **versione upstream** e non vede i **backport di sicurezza**
+della distro (Debian/Ubuntu mantengono il numero `9.6p1` mentre applicano le patch in
+`...ubuntuX.Y`) → montagne di CVE che sul pacchetto sono **già chiuse**.
+
+Per evitare l'allarme continuo, la **sonda** (che gira sul target) riporta lo stato `apt` dei
+pacchetti di sicurezza rilevanti (`packages`: versioni installate + quali hanno un upgrade
+pendente). Il collector incrocia ogni servizio con CVE:
+
+- **✅ già all'ultima versione** (`patched`) — il pacchetto **non** ha upgrade in coda: i suoi CVE
+  sono verosimilmente già chiusi dai backport → **NON guidano il semaforo** (finiscono in
+  `cve_patched`), l'anello CVE diventa verde «aggiornato».
+- **⚠ update disponibile** (`update_available`) — il pacchetto ha un upgrade: qui l'update è
+  **reale**, il servizio resta nel conteggio «da agire» e sale in cima alla remediation.
+- **n/d** — servizio non mappato a un pacchetto APT, o host non-Debian: comportamento invariato.
+
+Così un OpenSSH pieno di CVE upstream ma già patchato da Ubuntu passa da 🔴 a 🟢, mentre un
+pacchetto con un aggiornamento veramente pendente resta evidenziato. La logica è **collector-side**
+e best-effort: la sonda resta read-only (`apt-get -s upgrade` è una simulazione).
+
 ### Porte sensibili
 
 Tabella configurabile in `sai_engine.py` (interpretate nel contesto, NON

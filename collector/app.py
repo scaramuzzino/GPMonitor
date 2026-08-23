@@ -1008,6 +1008,44 @@ _APP_HINT = {
 }
 
 
+def _pkg_for_product(product):
+    """Mappa un prodotto/servizio (da nmap) al pacchetto APT o a una dipendenza
+    applicativa. Ritorna (pkg|None, kind) con kind in apt|app|manual."""
+    plow = (product or "").lower().replace(" ", "").replace("/", "")
+    for key in _APP_HINT:
+        if key in plow:
+            return None, "app"
+    for key, pk in _APT_PKG:
+        if key in plow:
+            return pk, "apt"
+    return None, "manual"
+
+
+def _host_packages(host):
+    """Dati 'packages' dell'ultima telemetria dell'host (o None)."""
+    with _lock:
+        d = _latest.get(host)
+    return d.get("packages") if isinstance(d, dict) else None
+
+
+def _backport_status(host, pkg):
+    """Stato del pacchetto sul target (dai dati sonda 'packages'):
+      'update_available' = c'e' un upgrade da applicare (CVE potenzialmente REALI);
+      'patched'          = gia' all'ultima versione disponibile (CVE probabilmente gia'
+                           chiuse da backport, o comunque non risolvibili con un update);
+      None               = non determinabile (non Debian/Ubuntu, pkg non mappato/assente)."""
+    if not (host and pkg):
+        return None
+    pkgs = _host_packages(host)
+    if not pkgs:
+        return None
+    if pkg in (pkgs.get("upgradable") or []):
+        return "update_available"
+    if pkg in (pkgs.get("installed") or {}):
+        return "patched"
+    return None
+
+
 def _rem_sev(cvss, exploit):
     if exploit or (cvss or 0) >= 9:
         return "high"
@@ -1016,10 +1054,12 @@ def _rem_sev(cvss, exploit):
     return "low"
 
 
-def build_remediation(result):
+def build_remediation(result, host=None):
     """Genera remediation azionabili DAL risultato dello scan (deterministico, no LLM):
     per ogni servizio con CVE deduce il pacchetto APT o la dipendenza applicativa,
-    i comandi concreti e la priorità (exploit noto / CVSS)."""
+    i comandi concreti e la priorità (exploit noto / CVSS). Se disponibili i dati
+    'packages' dell'host, aggiunge il verdetto backport (già all'ultima versione vs
+    aggiornamento disponibile)."""
     if not result:
         return None
     items, total_cve, total_expl = [], 0, 0
@@ -1068,17 +1108,29 @@ def build_remediation(result):
             action = ("Identifica il fornitore di **%s** (porta %s) e applica "
                       "l'aggiornamento di sicurezza consigliato." % (product or "servizio", p.get("port")))
         cves = sorted(vulns, key=lambda v: (not v.get("exploit"), -(v.get("cvss") or 0)))
+        backport = _backport_status(host, pkg)
         items.append({
             "sev": _rem_sev(maxc, expl), "port": p.get("port"), "proto": p.get("proto"),
             "service": product or p.get("service"), "pkg": pkg, "kind": kind,
+            "backport": backport,
             "max_cvss": maxc, "exploit": expl, "cve_count": len(vulns),
             "action": action, "commands": cmds,
             "cves": [{"id": v["id"], "cvss": v.get("cvss"), "exploit": bool(v.get("exploit"))}
                      for v in cves[:8]],
         })
     order = {"high": 0, "med": 1, "low": 2}
-    items.sort(key=lambda x: (order.get(x["sev"], 3), -(x["max_cvss"] or 0)))
-    notes = [
+    bp_order = {"update_available": 0, None: 1, "patched": 2}
+    # prima ciò che è davvero azionabile (update disponibile), poi ignoto, infine i già-patchati
+    items.sort(key=lambda x: (bp_order.get(x.get("backport"), 1), order.get(x["sev"], 3), -(x["max_cvss"] or 0)))
+    n_patched = sum(1 for i in items if i.get("backport") == "patched")
+    n_update = sum(1 for i in items if i.get("backport") == "update_available")
+    notes = []
+    if n_update:
+        notes.append("**%d servizio/i con aggiornamento DISPONIBILE**: qui l'update è reale e da applicare." % n_update)
+    if n_patched:
+        notes.append("**%d servizio/i già all'ultima versione disponibile** (nessun upgrade in coda): "
+                     "i relativi CVE sono verosimilmente **già chiusi dai backport** della distro." % n_patched)
+    notes += [
         "I rilievi di `vulners` sono **potenziali falsi positivi**: correlano per versione "
         "upstream e NON tengono conto dei backport di Ubuntu (pacchetti `...ubuntuX.Y`). "
         "Verifica sempre con `apt-get changelog <pkg>`.",
@@ -1087,30 +1139,43 @@ def build_remediation(result):
         "Riduci la superficie: filtra/chiudi le porte non necessarie esposte oltre la rete fidata/VPN.",
     ]
     return {"items": items, "notes": notes,
-            "totals": {"cve": total_cve, "exploit": total_expl, "services": len(items)}}
+            "totals": {"cve": total_cve, "exploit": total_expl, "services": len(items),
+                       "patched_services": n_patched, "update_services": n_update}}
 
 
-def scan_summary(result):
+def scan_summary(result, host=None):
     """Riepilogo per il KPI di sicurezza RAG sulla card: CVE deduplicate per id,
-    con conteggio criticità / alte / con-exploit e porte aperte."""
+    con conteggio criticità / alte / con-exploit e porte aperte.
+    **Backport-aware**: se sono disponibili i dati 'packages' dell'host, i CVE dei
+    servizi il cui pacchetto è già all'ultima versione disponibile ('patched') NON
+    guidano il semaforo (finiscono in `cve_patched`), perché verosimilmente già chiusi
+    dai backport della distro. I servizi con upgrade disponibile restano nel conteggio."""
     if not result:
         return None
-    seen = {}
-    for p in result.get("ports", []):
-        for v in (p.get("vulns") or []):
-            k = v.get("id")
-            c = v.get("cvss") or 0
-            e = seen.get(k)
+    def _acc(bucket, vulns):
+        for v in vulns:
+            k = v.get("id"); c = v.get("cvss") or 0; e = bucket.get(k)
             if e is None or c > (e["cvss"] or 0):
-                seen[k] = {"cvss": c, "exploit": bool(v.get("exploit")) or (e["exploit"] if e else False)}
+                bucket[k] = {"cvss": c, "exploit": bool(v.get("exploit")) or (e["exploit"] if e else False)}
             elif v.get("exploit"):
-                seen[k]["exploit"] = True
+                bucket[k]["exploit"] = True
+    seen, patched = {}, {}   # confermati (guidano il RAG) / probabilmente già patchati
+    aware = bool(host and _host_packages(host))
+    for p in result.get("ports", []):
+        vulns = p.get("vulns") or []
+        if not vulns:
+            continue
+        pkg, _kind = _pkg_for_product(p.get("product") or p.get("service"))
+        bp = _backport_status(host, pkg) if aware else None
+        _acc(patched if bp == "patched" else seen, vulns)
     vals = list(seen.values())
     return {
         "cve": len(vals),
         "exploit": sum(1 for v in vals if v["exploit"]),
         "critical": sum(1 for v in vals if (v["cvss"] or 0) >= 9),
         "high": sum(1 for v in vals if 7 <= (v["cvss"] or 0) < 9),
+        "cve_patched": len(patched),
+        "backport_aware": aware,
         "open_ports": len(result.get("ports", [])),
         "up": bool(result.get("up")),
     }
@@ -1560,7 +1625,7 @@ class Handler(BaseHTTPRequestHandler):
             for name, _t in list(HOSTS):
                 cur = get_scan(name)
                 if cur:
-                    s = scan_summary(cur["result"]) or {}
+                    s = scan_summary(cur["result"], name) or {}
                     s.update({"ts": cur["ts"], "age": now - cur["ts"],
                               "status": cur["status"], "running": name in running})
                     out[name] = s
@@ -1584,7 +1649,7 @@ class Handler(BaseHTTPRequestHandler):
                 resp.update({"ts": cur["ts"], "age": now - cur["ts"],
                              "duration": cur["duration"], "status": cur["status"],
                              "result": cur["result"]})
-                resp["remediation"] = build_remediation(cur["result"])
+                resp["remediation"] = build_remediation(cur["result"], host)
             else:
                 resp["status"] = "none"
             self._json(200, resp)

@@ -1279,21 +1279,26 @@ function secKpi(name){
       <span class="cap">${running?"scan…":"no scan"}</span></a>`;
   }
   const crit=s.critical||0, high=s.high||0, expl=s.exploit||0, cve=s.cve||0;
-  let cls, cap, tip;
+  const patched=s.cve_patched||0;
+  let cls, cap, tip, ringN=cve;
   if(expl>0 || crit>0){
     cls="red";
     cap = expl>0 ? `⚡ ${expl} exploit` : `${crit} critiche`;
-    tip = `${cve} CVE correlate · ${crit} critiche (CVSS≥9) · ${expl} con exploit noto — clicca per il dettaglio`;
+    tip = `${cve} CVE da agire · ${crit} critiche (CVSS≥9) · ${expl} con exploit noto — clicca per il dettaglio`;
   } else if(high>0){
-    cls="amber"; cap=`${high} gravi`; tip=`${cve} CVE correlate · ${high} gravi (CVSS 7–9) — clicca per il dettaglio`;
+    cls="amber"; cap=`${high} gravi`; tip=`${cve} CVE da agire · ${high} gravi (CVSS 7–9) — clicca per il dettaglio`;
   } else if(cve>0){
-    cls="amber"; cap="da rivedere"; tip=`${cve} CVE correlate (nessuna grave) — clicca per il dettaglio`;
+    cls="amber"; cap="da rivedere"; tip=`${cve} CVE da agire (nessuna grave) — clicca per il dettaglio`;
+  } else if(patched>0){
+    // nessuna CVE "da agire": i pacchetti coinvolti sono già all'ultima versione disponibile (backport)
+    cls="green"; cap="aggiornato"; ringN=patched;
+    tip=`${patched} CVE potenziali, ma i pacchetti sono già all'ultima versione disponibile (probabile backport della distro) — clicca per il dettaglio`;
   } else {
     cls="green"; cap="sicuro"; tip="nessuna CVE correlata — clicca per il dettaglio";
   }
   if(running) cls+=" run";
   return `<a class="seckpi ${cls}" data-scan="${escapeHtml(name)}" title="${tip}">
-    <span class="ring"><b>${cve}</b><i>CVE</i></span>
+    <span class="ring"><b>${ringN}</b><i>CVE</i></span>
     <span class="cap">${cap}</span></a>`;
 }
 async function loadScans(){
@@ -2464,13 +2469,18 @@ function remediationHtml(rem){
     const cmds=(it.commands||[]).map(c=>c.trim().startsWith("#")?`<span class="cmt">${escapeHtml(c)}</span>`:escapeHtml(c)).join("\n");
     const kindTag=it.kind==="apt"?`<span class="rk apt">APT · ${escapeHtml(it.pkg||"")}</span>`
       :it.kind==="app"?`<span class="rk app">app</span>`:`<span class="rk man">manuale</span>`;
+    const bpTag = it.backport==="patched"
+      ? `<span class="rk" style="color:var(--ok);border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.10)" title="il pacchetto è già all'ultima versione disponibile: questi CVE sono verosimilmente già chiusi dai backport della distro">✅ già all'ultima versione</span>`
+      : it.backport==="update_available"
+      ? `<span class="rk" style="color:var(--bad);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.10)" title="esiste un aggiornamento del pacchetto: qui l'update è reale, applicalo">⚠ update disponibile</span>`
+      : "";
     const cves=(it.cves||[]).map(v=>`<a class="cvchip" href="${cveLink(v.id)}" target="_blank" rel="noopener" style="border-color:${cveColor(v.cvss)}"><b style="color:${cveColor(v.cvss)}">${v.cvss!=null?v.cvss.toFixed(1):"·"}</b>${escapeHtml(v.id)}${v.exploit?" ⚡":""}</a>`).join("");
     return `<div class="remitem" style="border-left-color:${col}">
       <div class="remhead">
         <span class="rsev" style="background:${col}">${sevLabel[it.sev]||it.sev}</span>
         <b>${escapeHtml(it.service||"?")}</b>
         <span class="rport">porta ${it.port}/${escapeHtml(it.proto||"tcp")}</span>
-        ${kindTag}
+        ${kindTag}${bpTag}
         <span class="rmeta">${it.cve_count} CVE · max ${it.max_cvss?it.max_cvss.toFixed(1):"—"}${it.exploit?` · ${it.exploit} ⚡`:""}</span>
       </div>
       <div class="remaction">${mdBold(it.action)}</div>

@@ -327,6 +327,45 @@ def security():
     return sec
 
 
+# pacchetti di sicurezza rilevanti: se un servizio con CVE mappa su uno di questi
+# e il pacchetto e' gia' all'ultima versione, i CVE di vulners sono verosimilmente
+# falsi positivi (backport della distro). Lista curata, allineata alla mappa APT del collector.
+_SEC_PKGS = [
+    "openssh-server", "openssh-client", "openssl", "libssl3", "libssl1.1",
+    "nginx", "nginx-core", "apache2", "apache2-bin", "lighttpd", "haproxy", "squid", "varnish",
+    "postfix", "exim4", "dovecot-core", "dovecot-imapd", "dovecot-pop3d", "cyrus-imapd",
+    "postgresql", "mariadb-server", "mysql-server", "redis-server", "memcached",
+    "mongodb-org-server", "rabbitmq-server",
+    "vsftpd", "proftpd-basic", "pure-ftpd", "bind9", "unbound", "dnsmasq", "isc-dhcp-server",
+    "openvpn", "strongswan", "chrony", "ntp", "snmpd", "rsync", "samba", "cups", "mosquitto",
+    "php", "docker-ce", "containerd.io", "tomcat9", "jetty9",
+]
+
+
+def packages():
+    """Su Debian/Ubuntu: versioni installate dei pacchetti di sicurezza rilevanti +
+    quali hanno un upgrade pendente. Il collector lo usa per capire se un servizio con
+    CVE e' gia' all'ultima versione disponibile (probabile falso positivo da backport)
+    o ha davvero un aggiornamento da applicare. None su altri OS / gestori diversi da APT."""
+    if not (have("dpkg-query") and have("apt-get")):
+        return None
+    installed = {}
+    out = run(["dpkg-query", "-W", "-f=${Package} ${Version}\n"] + _SEC_PKGS, timeout=15)
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) == 2 and f[1]:
+            installed[f[0]] = f[1]
+    upgradable = []
+    # simulazione (-s): non modifica nulla, non richiede rete se le liste apt sono in cache
+    sim = run(["apt-get", "-s", "upgrade"], timeout=25)
+    for line in sim.splitlines():
+        if line.startswith("Inst "):
+            parts = line.split()
+            if len(parts) >= 2:
+                upgradable.append(parts[1])
+    return {"installed": installed, "upgradable": sorted(set(upgradable))}
+
+
 def main():
     doc = {
         "v": PROBE_VERSION,
@@ -341,6 +380,7 @@ def main():
         "docker": docker_containers(),
         "docker_images": docker_images_count(),
         "security": security(),
+        "packages": packages(),
     }
     print(json.dumps(doc, separators=(",", ":")))
 
