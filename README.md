@@ -22,6 +22,13 @@ e — via `nmap` — porte, servizi e CVE. Dashboard web con grafici SVG vanilla
 Dashboard** con SAI (Security Activity Index), report email giornalieri, watchdog di allarme e
 auto-ban degli scanner.
 
+## Anteprima
+
+![Dashboard GPMonitor — card per host, Security Activity Dashboard con SAI e Security Changes](docs/preview-dashboard.svg)
+
+<sub>Anteprima dell'interfaccia (dati d'esempio). Card per host con anello CVE e throughput RX/TX,
+barra KPI di sicurezza, tabella SAI per server con drill-down e feed Security Changes.</sub>
+
 ---
 
 ## Caratteristiche

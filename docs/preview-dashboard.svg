@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 792" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d2137"/><stop offset="1" stop-color="#161b22"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="792" fill="#0d1117"/>
+
+  <!-- header -->
+  <rect x="0" y="0" width="1200" height="56" fill="#161b22"/>
+  <line x1="0" y1="56" x2="1200" y2="56" stroke="#30363d"/>
+  <text x="24" y="30" fill="#e6edf3" font-size="19" font-weight="700">GP monitor</text>
+  <rect x="150" y="17" width="46" height="20" rx="10" fill="none" stroke="#3fb950"/>
+  <text x="173" y="31" fill="#3fb950" font-size="11" font-weight="700" text-anchor="middle">v3.0</text>
+  <text x="24" y="47" fill="#58a6ff" font-size="11" font-style="italic">Stefano Scaramuzzino</text>
+  <g font-size="12" fill="#8b949e">
+    <rect x="902" y="15" width="88" height="26" rx="7" fill="#0d1117" stroke="#30363d"/><text x="946" y="32" text-anchor="middle">❓ Guida</text>
+    <rect x="998" y="15" width="88" height="26" rx="7" fill="#0d1117" stroke="#30363d"/><text x="1042" y="32" text-anchor="middle">⚙ Config</text>
+    <rect x="1094" y="15" width="82" height="26" rx="7" fill="#0d1117" stroke="#30363d"/><text x="1135" y="32" text-anchor="middle">Esci</text>
+  </g>
+
+  <!-- server cards -->
+  <!-- card template repeated 3x -->
+  <g>
+    <!-- srv1 -->
+    <rect x="24" y="80" width="368" height="250" rx="10" fill="#161b22" stroke="#30363d"/>
+    <circle cx="44" cy="108" r="5" fill="#3fb950"/><text x="56" y="113" fill="#e6edf3" font-size="15" font-weight="700">srv1</text>
+    <circle cx="358" cy="110" r="16" fill="none" stroke="#3fb950" stroke-width="3"/><text x="358" y="108" fill="#e6edf3" font-size="9" text-anchor="middle">0</text><text x="358" y="118" fill="#8b949e" font-size="6" text-anchor="middle">CVE</text>
+    <text x="56" y="132" fill="#8b949e" font-size="9.5">srv1 · 8s fa</text>
+    <g font-size="10" fill="#8b949e">
+      <rect x="40" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="93" y="158" text-anchor="middle">📊 Status</text>
+      <rect x="152" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="205" y="158" text-anchor="middle">🐳 8/8</text>
+      <rect x="264" y="142" width="112" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="320" y="158" text-anchor="middle">in grafico</text>
+    </g>
+    <text x="44" y="194" fill="#8b949e" font-size="9">RAM</text><rect x="42" y="200" width="150" height="6" rx="3" fill="#21262d"/><rect x="42" y="200" width="92" height="6" rx="3" fill="#3fb950"/><text x="205" y="205" fill="#8b949e" font-size="9">61%</text>
+    <text x="44" y="224" fill="#8b949e" font-size="9">Disco</text><rect x="42" y="230" width="150" height="6" rx="3" fill="#21262d"/><rect x="42" y="230" width="70" height="6" rx="3" fill="#3fb950"/><text x="205" y="235" fill="#8b949e" font-size="9">47%</text>
+    <text x="44" y="266" fill="#8b949e" font-size="9">Rete ↓ RX</text><text x="44" y="286" fill="#39d0d8" font-size="15" font-weight="700">1.2 MB/s <tspan fill="#f85149">⚡</tspan></text>
+    <text x="210" y="266" fill="#8b949e" font-size="9">Rete ↑ TX</text><text x="210" y="286" fill="#a371f7" font-size="15" font-weight="700">340 KB/s <tspan fill="#3fb950">⚡</tspan></text>
+  </g>
+  <g>
+    <!-- srv2 -->
+    <rect x="408" y="80" width="368" height="250" rx="10" fill="#161b22" stroke="#30363d"/>
+    <circle cx="428" cy="108" r="5" fill="#3fb950"/><text x="440" y="113" fill="#e6edf3" font-size="15" font-weight="700">srv2</text>
+    <circle cx="742" cy="110" r="16" fill="none" stroke="#d29922" stroke-width="3"/><text x="742" y="108" fill="#e6edf3" font-size="9" text-anchor="middle">6</text><text x="742" y="118" fill="#8b949e" font-size="6" text-anchor="middle">CVE</text>
+    <text x="440" y="132" fill="#8b949e" font-size="9.5">srv2 · 5s fa</text>
+    <g font-size="10" fill="#8b949e">
+      <rect x="424" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="477" y="158" text-anchor="middle">📊 Status</text>
+      <rect x="536" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="589" y="158" text-anchor="middle">🐳 12/12</text>
+      <rect x="648" y="142" width="112" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="704" y="158" text-anchor="middle">in grafico</text>
+    </g>
+    <text x="428" y="194" fill="#8b949e" font-size="9">RAM</text><rect x="426" y="200" width="150" height="6" rx="3" fill="#21262d"/><rect x="426" y="200" width="118" height="6" rx="3" fill="#d29922"/><text x="589" y="205" fill="#8b949e" font-size="9">78%</text>
+    <text x="428" y="224" fill="#8b949e" font-size="9">Disco</text><rect x="426" y="230" width="150" height="6" rx="3" fill="#21262d"/><rect x="426" y="230" width="86" height="6" rx="3" fill="#3fb950"/><text x="589" y="235" fill="#8b949e" font-size="9">57%</text>
+    <text x="428" y="266" fill="#8b949e" font-size="9">Rete ↓ RX</text><text x="428" y="286" fill="#39d0d8" font-size="15" font-weight="700">820 KB/s <tspan fill="#d29922">⚡</tspan></text>
+    <text x="594" y="266" fill="#8b949e" font-size="9">Rete ↑ TX</text><text x="594" y="286" fill="#a371f7" font-size="15" font-weight="700">210 KB/s <tspan fill="#3fb950">⚡</tspan></text>
+  </g>
+  <g>
+    <!-- srv3 -->
+    <rect x="792" y="80" width="368" height="250" rx="10" fill="#161b22" stroke="#30363d"/>
+    <circle cx="812" cy="108" r="5" fill="#d29922"/><text x="824" y="113" fill="#e6edf3" font-size="15" font-weight="700">srv3</text>
+    <circle cx="1126" cy="110" r="16" fill="none" stroke="#d29922" stroke-width="3"/><text x="1126" y="108" fill="#e6edf3" font-size="9" text-anchor="middle">16</text><text x="1126" y="118" fill="#8b949e" font-size="6" text-anchor="middle">CVE</text>
+    <text x="824" y="132" fill="#8b949e" font-size="9.5">srv3 · 11s fa</text>
+    <g font-size="10" fill="#8b949e">
+      <rect x="808" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="861" y="158" text-anchor="middle">📊 Status</text>
+      <rect x="920" y="142" width="106" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="973" y="158" text-anchor="middle">🐳 8/9</text>
+      <rect x="1032" y="142" width="112" height="24" rx="7" fill="#0d1117" stroke="#30363d"/><text x="1088" y="158" text-anchor="middle">in grafico</text>
+    </g>
+    <text x="812" y="194" fill="#8b949e" font-size="9">RAM</text><rect x="810" y="200" width="150" height="6" rx="3" fill="#21262d"/><rect x="810" y="200" width="64" height="6" rx="3" fill="#3fb950"/><text x="973" y="205" fill="#8b949e" font-size="9">43%</text>
+    <text x="812" y="224" fill="#8b949e" font-size="9">Disco</text><rect x="810" y="230" width="150" height="6" rx="3" fill="#21262d"/><rect x="810" y="230" width="132" height="6" rx="3" fill="#f85149"/><text x="973" y="235" fill="#8b949e" font-size="9">88%</text>
+    <text x="812" y="266" fill="#8b949e" font-size="9">Rete ↓ RX</text><text x="812" y="286" fill="#39d0d8" font-size="15" font-weight="700">4.6 MB/s <tspan fill="#f85149">⚡</tspan></text>
+    <text x="978" y="266" fill="#8b949e" font-size="9">Rete ↑ TX</text><text x="978" y="286" fill="#a371f7" font-size="15" font-weight="700">1.1 MB/s <tspan fill="#d29922">⚡</tspan></text>
+  </g>
+
+  <!-- Security Activity Dashboard -->
+  <rect x="24" y="350" width="1152" height="418" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text x="44" y="382" fill="#e6edf3" font-size="14" font-weight="700">Sicurezza — Security Activity Dashboard</text>
+  <circle cx="1120" cy="377" r="4" fill="#3fb950"/><text x="1132" y="381" fill="#3fb950" font-size="10" font-weight="700">REALTIME</text>
+  <text x="44" y="402" fill="#8b949e" font-size="11">Fleet → clicca un server per il drill-down (drawer: metriche, porte, peer, eventi, timeline) · oppure clicca un KPI per filtrare gli eventi</text>
+
+  <!-- KPI tiles -->
+  <g>
+    <g><rect x="44" y="416" width="176" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="132" y="446" fill="#e6edf3" font-size="22" font-weight="800" text-anchor="middle">0</text><text x="132" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">ACTIVE ATTACK</text></g>
+    <g><rect x="230" y="416" width="176" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="318" y="446" fill="#e6edf3" font-size="22" font-weight="800" text-anchor="middle">0</text><text x="318" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">SSH FAILURES /h</text></g>
+    <g><rect x="416" y="416" width="176" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="504" y="446" fill="#e6edf3" font-size="22" font-weight="800" text-anchor="middle">0</text><text x="504" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">INVALID USERS /h</text></g>
+    <g><rect x="602" y="416" width="176" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="690" y="446" fill="#d29922" font-size="22" font-weight="800" text-anchor="middle">28</text><text x="690" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">FW DROP /min</text></g>
+    <g><rect x="788" y="416" width="176" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="876" y="446" fill="#e6edf3" font-size="22" font-weight="800" text-anchor="middle">0</text><text x="876" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">FAIL2BAN BANNED</text></g>
+    <g><rect x="974" y="416" width="182" height="60" rx="9" fill="#0d1117" stroke="#30363d"/><text x="1065" y="446" fill="#d29922" font-size="22" font-weight="800" text-anchor="middle">1</text><text x="1065" y="463" fill="#8b949e" font-size="9.5" text-anchor="middle">NEW PORTS</text></g>
+  </g>
+
+  <!-- SAI table -->
+  <g font-size="10" fill="#8b949e">
+    <text x="60" y="504">SERVER</text><text x="230" y="504">TIMELINE SAI</text><text x="770" y="504" text-anchor="end">SAI</text><text x="860" y="504">STATO</text>
+  </g>
+  <line x1="44" y1="512" x2="1156" y2="512" stroke="#30363d"/>
+  <!-- row srv1 -->
+  <text x="60" y="536" fill="#e6edf3" font-size="12.5" font-weight="700">srv1</text>
+  <polyline points="230,538 270,536 310,539 350,535 390,537 430,534 470,536 510,535 550,537 590,536 630,535 670,536" fill="none" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="770" y="540" fill="#3fb950" font-size="15" font-weight="800" text-anchor="end">2</text>
+  <rect x="860" y="527" width="86" height="18" rx="9" fill="#0f2417" stroke="#3fb950"/><text x="903" y="540" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">NORMAL</text>
+  <text x="1140" y="540" fill="#8b949e" font-size="15" text-anchor="end">›</text>
+  <line x1="44" y1="552" x2="1156" y2="552" stroke="#1b2129"/>
+  <!-- row srv2 -->
+  <text x="60" y="576" fill="#e6edf3" font-size="12.5" font-weight="700">srv2</text>
+  <polyline points="230,578 270,576 310,574 350,577 390,573 430,575 470,572 510,574 550,571 590,573 630,575 670,574" fill="none" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="770" y="580" fill="#3fb950" font-size="15" font-weight="800" text-anchor="end">3</text>
+  <rect x="860" y="567" width="86" height="18" rx="9" fill="#0f2417" stroke="#3fb950"/><text x="903" y="580" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">NORMAL</text>
+  <text x="1140" y="580" fill="#8b949e" font-size="15" text-anchor="end">›</text>
+  <line x1="44" y1="592" x2="1156" y2="592" stroke="#1b2129"/>
+  <!-- row srv3 (elevated) -->
+  <text x="60" y="616" fill="#e6edf3" font-size="12.5" font-weight="700">srv3</text>
+  <polyline points="230,620 270,618 310,614 350,610 390,600 430,585 470,588 510,596 550,606 590,600 630,592 670,596" fill="none" stroke="#d29922" stroke-width="1.6"/>
+  <text x="770" y="620" fill="#d29922" font-size="15" font-weight="800" text-anchor="end">41</text>
+  <rect x="856" y="607" width="94" height="18" rx="9" fill="#2a2410" stroke="#d29922"/><text x="903" y="620" fill="#d29922" font-size="10" font-weight="700" text-anchor="middle">ELEVATED</text>
+  <text x="1140" y="620" fill="#58a6ff" font-size="15" text-anchor="end">›</text>
+
+  <!-- Security Changes -->
+  <text x="44" y="662" fill="#8b949e" font-size="11" font-weight="700">SECURITY CHANGES</text>
+  <g font-size="11">
+    <rect x="44" y="674" width="1112" height="26" rx="6" fill="#0d1117" stroke="#30363d"/>
+    <text x="58" y="691" fill="#8b949e">16:42</text><text x="118" y="691" fill="#e6edf3">srv3</text><text x="200" y="691" fill="#d29922" font-weight="700">NEW PORT</text><text x="340" y="691" fill="#c9d1d9">TCP/2375 su 0.0.0.0</text><text x="1142" y="691" fill="#d29922" text-anchor="end">high</text>
+    <rect x="44" y="704" width="1112" height="26" rx="6" fill="#0d1117" stroke="#30363d"/>
+    <text x="58" y="721" fill="#8b949e">16:38</text><text x="118" y="721" fill="#e6edf3">srv3</text><text x="200" y="721" fill="#d29922" font-weight="700">FW SPIKE</text><text x="340" y="721" fill="#c9d1d9">41/min (baseline 12)</text><text x="1142" y="721" fill="#d29922" text-anchor="end">medium</text>
+    <rect x="44" y="734" width="1112" height="26" rx="6" fill="#0d1117" stroke="#30363d"/>
+    <text x="58" y="751" fill="#8b949e">16:31</text><text x="118" y="751" fill="#e6edf3">srv2</text><text x="200" y="751" fill="#58a6ff" font-weight="700">NEW OUT PEER</text><text x="340" y="751" fill="#c9d1d9">10.23.7.18:443</text><text x="1142" y="751" fill="#8b949e" text-anchor="end">medium</text>
+  </g>
+</svg>
