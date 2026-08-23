@@ -28,7 +28,8 @@ auto-ban degli scanner.
 
 - **Agentless**: nessun demone installato sui target — solo una sonda-script eseguita via SSH a
   comando forzato (read-only). Un OS = una sonda-script (`monitor-probe.py` per Linux,
-  `monitor-probe-macos.py` per macOS), scelta in base al sistema. Mai un agente compilato.
+  `monitor-probe-macos.py` per macOS, `monitor-probe-windows.ps1` per Windows), scelta in base al
+  sistema. Tutte emettono lo **stesso schema JSON**. Mai un agente compilato.
 - **On-premise / stdlib**: nessuna dipendenza esterna, nessun traffico verso il cloud
   (unica eccezione opzionale e disattivabile: la correlazione CVE via `vulners`, vedi sotto).
 - **Dashboard web** (SVG vanilla): card per host (RAM/disco, **throughput di rete realtime** RX/TX
@@ -115,6 +116,7 @@ Componenti (cartella `collector/`):
 | `login.html` | Pagina di login/registrazione. |
 | `monitor-probe.py` | Sonda **Linux** (JSON): RAM (`/proc/meminfo`), disco (`findmnt`), rete (`/proc/net/dev`), conn (`ss`), docker (`docker ps/stats`), sicurezza (drop iptables/ip6tables, SSH da journal, fail2ban, porte). |
 | `monitor-probe-macos.py` | Sonda **macOS** (stesso schema JSON): `sysctl`/`vm_stat`, `df`, `netstat`. |
+| `monitor-probe-windows.ps1` | Sonda **Windows** (PowerShell, stesso schema JSON): `Win32_OperatingSystem`/`Win32_LogicalDisk`, `Get-NetAdapterStatistics`, `Get-NetTCPConnection`, Event Log 4625 per SSH. |
 | `tests/test_security.py` | Test unittest stdlib del SAI engine (52 test). |
 | `tools/db-backup.py` | Backup online SQLite con rotazione (percorsi/ritenzione via env). |
 | `tools/email-report.py` | Report giornaliero via email (HTML), config SMTP/DB via env. |
@@ -245,7 +247,8 @@ Fleet (KPI globali)
 - Connettività **SSH** dal collector ai target. Va bene qualsiasi rete raggiungibile:
   cloud, datacenter on-premise/CED, LAN o VPN. Per esporre in sicurezza servizi altrimenti privati,
   una mesh come **Tailscale/WireGuard** è un'ottima opzione (zero-config, cifrata) ma **non è richiesta**.
-- Sui target: `python3` e accesso SSH; la sonda gira a comando forzato.
+- Sui target: accesso SSH e la sonda a comando forzato — `python3` su Linux/macOS, **PowerShell**
+  su Windows (OpenSSH Server). Nessun altro requisito.
 
 ---
 
@@ -298,6 +301,19 @@ command="/usr/local/bin/monitor-probe.py",no-pty,no-port-forwarding,no-X11-forwa
 # macOS: usa monitor-probe-macos.py
 command="/usr/bin/python3 /percorso/monitor-probe-macos.py",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding <CHIAVE_PUBBLICA>
 ```
+
+**Windows** (OpenSSH Server + PowerShell): copia `collector/monitor-probe-windows.ps1` sul target
+(es. `C:\gpmon\monitor-probe-windows.ps1`) e aggiungi la riga a comando forzato nel file
+`authorized_keys` dell'utente di monitoraggio (per un utente admin è
+`C:\ProgramData\ssh\administrator_authorized_keys`, altrimenti `%USERPROFILE%\.ssh\authorized_keys`):
+
+```
+command="powershell -NoProfile -ExecutionPolicy Bypass -File C:\gpmon\monitor-probe-windows.ps1",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding <CHIAVE_PUBBLICA>
+```
+
+> Requisiti Windows: Windows 8/Server 2012+ e PowerShell 5.1+. Per contare gli SSH falliti serve
+> l'accesso al log **Security** (utente admin o nel gruppo *Event Log Readers*); firewall drop e
+> fail2ban non esistono su Windows e vengono riportati come `null` (dato non disponibile ≠ 0).
 
 La chiave pubblica è in `collector/ssh/monitor_ed25519.pub` (la stampa anche `install.sh`).
 In alternativa, dalla Config si può usare **Installa sonda + aggiungi** (una password bootstrap
