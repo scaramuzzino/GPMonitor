@@ -512,6 +512,12 @@
   .seckpi-tile .v{font-size:22px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
   .seckpi-tile .v.red{color:var(--bad)} .seckpi-tile .v.amber{color:var(--warn)} .seckpi-tile .v.green{color:var(--ok)}
   .seckpi-tile .l{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .seckpi-tile.clk{cursor:pointer;transition:border-color .12s,background .12s}
+  .seckpi-tile.clk:hover{border-color:var(--accent);background:#0d2137}
+  .seccap{font-size:11px;color:var(--mut);margin:-4px 0 9px}
+  .seccap b{color:var(--fg)}
+  .sai-table .drill{float:right;color:var(--mut);font-size:16px;font-weight:700;line-height:1;margin-left:8px}
+  .sai-table tr:hover .drill{color:var(--accent)}
   /* tabella timeline SAI per host */
   .sai-table{width:100%;border-collapse:collapse;font-size:12.5px}
   .sai-table th{color:var(--mut);font-weight:500;font-size:10px;text-transform:uppercase;text-align:left;
@@ -610,8 +616,9 @@
       <h3>Sicurezza — Security Activity Dashboard</h3>
       <span class="livedot">REALTIME</span>
     </div>
-    <!-- KPI globali -->
+    <!-- KPI globali (cliccabili: filtrano il feed eventi) -->
     <div class="seckpis" id="secKpis"></div>
+    <div class="seccap">Fleet → <b>clicca un server</b> per il drill-down (drawer: metriche, porte, peer, eventi, timeline) · oppure clicca un KPI per filtrare gli eventi</div>
     <!-- timeline SAI per host -->
     <table class="sai-table">
       <thead><tr><th>Server</th><th>Timeline SAI</th><th class="num">SAI</th><th>Stato</th></tr></thead>
@@ -1690,15 +1697,15 @@ function stateBadge(state){
 function renderSecKpis(){
   const t=SEC_OVERVIEW.totals||{};
   const tiles=[
-    {v:t.active_attack||0, l:"Active Attack", c:t.active_attack>0?"red":""},
-    {v:(t.ssh_failed_1h||0), l:"SSH Failures /h", c:(t.ssh_failed_1h||0)>0?"amber":""},
-    {v:(t.ssh_invalid_1h||0), l:"Invalid Users /h", c:(t.ssh_invalid_1h||0)>0?"amber":""},
-    {v:fmtFwRate(t.fw_drop_rate||0), l:"FW Drop /min", c:(t.fw_drop_rate||0)>20?"amber":""},
-    {v:(t.f2b_banned||0), l:"Fail2ban Banned", c:(t.f2b_banned||0)>0?"amber":""},
-    {v:(t.new_ports||0), l:"New Ports", c:(t.new_ports||0)>0?"amber":""},
+    {v:t.active_attack||0, l:"Active Attack", c:t.active_attack>0?"red":"", f:"all"},
+    {v:(t.ssh_failed_1h||0), l:"SSH Failures /h", c:(t.ssh_failed_1h||0)>0?"amber":"", f:"ssh_failed_spike,ssh_invalid_spike"},
+    {v:(t.ssh_invalid_1h||0), l:"Invalid Users /h", c:(t.ssh_invalid_1h||0)>0?"amber":"", f:"ssh_failed_spike,ssh_invalid_spike"},
+    {v:fmtFwRate(t.fw_drop_rate||0), l:"FW Drop /min", c:(t.fw_drop_rate||0)>20?"amber":"", f:"firewall_spike"},
+    {v:(t.f2b_banned||0), l:"Fail2ban Banned", c:(t.f2b_banned||0)>0?"amber":"", f:"fail2ban_ban"},
+    {v:(t.new_ports||0), l:"New Ports", c:(t.new_ports||0)>0?"amber":"", f:"new_listen_port,removed_listen_port"},
   ];
   document.getElementById("secKpis").innerHTML=tiles.map(t=>
-    `<div class="seckpi-tile"><div class="v ${t.c}">${t.v}</div><div class="l">${t.l}</div></div>`).join("");
+    `<div class="seckpi-tile clk" data-kpi="${escapeHtml(t.f)}" title="filtra gli eventi: ${escapeHtml(t.l)}"><div class="v ${t.c}">${t.v}</div><div class="l">${t.l}</div></div>`).join("");
 }
 function fmtFwRate(n){ if(n==null) return "—"; if(n>=1000) return (n/1000).toFixed(1)+"k"; return n.toFixed(0); }
 function renderSaiRows(){
@@ -1713,7 +1720,7 @@ function renderSaiRows(){
       <td class="host">${escapeHtml(h.host)}${h.error?' <span style="color:var(--bad)">⚠</span>':''}</td>
       <td>${saiSparkline(hist,color)}</td>
       <td class="sai-val" style="color:${color}">${h.sai==null?"—":h.sai}</td>
-      <td>${stateBadge(h.state)}</td>
+      <td>${stateBadge(h.state)}<span class="drill" title="apri drill-down">›</span></td>
     </tr>`;
   }).join("");
 }
@@ -1929,7 +1936,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx]");
+  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx],[data-kpi]");
   if(!t) return;
   if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
                           document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); refresh(); }
@@ -1971,6 +1978,8 @@ document.addEventListener("click", e=>{
       copyClip(txt).then(ok=>{ if(!ok) openCopy("Comandi — "+(it.service||""), txt);
         else { t.textContent="✓ copiati"; setTimeout(()=>{ t.textContent="📋 copia comandi"; }, 1500); } }); } }
   else if(t.dataset.sechost){ openSecDrawer(t.dataset.sechost); }
+  else if(t.dataset.kpi!==undefined){ secEvFilter=t.dataset.kpi; renderSecFilters(); refreshSec();
+    const f=document.querySelector(".secfeed"); if(f) f.scrollIntoView({behavior:"smooth",block:"nearest"}); }
   else if(t.dataset.secfilter){ secEvFilter=t.dataset.secfilter; renderSecFilters(); refreshSec(); }
   else if(t.dataset.secwin){ secEvWinMin=+t.dataset.secwin; renderSecFilters(); refreshSec(); }
   else if(t.dataset.secx){ closeSecDrawer(); }
