@@ -1542,6 +1542,7 @@ function evDesc(e){
 function openSecDrawer(host){
   secDrawerHost=host;
   document.getElementById("secOvl").classList.add("on");
+  document.getElementById("secDrawer").classList.add("on");
   document.getElementById("secDrawer").setAttribute("aria-hidden","false");
   document.getElementById("secTitle").textContent=host+" — Security Activity";
   loadSecDrawer();
@@ -1549,6 +1550,7 @@ function openSecDrawer(host){
 function closeSecDrawer(){
   secDrawerHost=null;
   document.getElementById("secOvl").classList.remove("on");
+  document.getElementById("secDrawer").classList.remove("on");
   document.getElementById("secDrawer").setAttribute("aria-hidden","true");
 }
 async function loadSecDrawer(){
