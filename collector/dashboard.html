@@ -564,43 +564,7 @@
     <div class="presets" id="presets"></div>
   </div>
 
-  <!-- rete + sicurezza affiancate (metà larghezza ciascuna) -->
-  <div class="panel-row">
-    <!-- strip rete -->
-    <div class="panel">
-      <div class="panel-head">
-        <h3>Rete — throughput per server</h3>
-        <div class="toggles" id="netTg"></div>
-        <div class="legend" id="netLeg"></div>
-      </div>
-      <div class="chart" id="netChart"><div class="tip" id="netTip"></div></div>
-    </div>
-
-    <!-- strip sicurezza -->
-    <div class="panel">
-      <div class="panel-head">
-        <h3>Sicurezza — attività per server</h3>
-        <div class="toggles" id="secTg"></div>
-        <div class="legend" id="secLeg"></div>
-      </div>
-      <div class="chart" id="secChart"><div class="tip" id="secTip"></div></div>
-    </div>
-  </div>
-
-  <!-- flussi di rete (chi comunica con chi, su quali porte) -->
-  <div class="panel">
-    <div class="panel-head">
-      <h3>Flussi di rete — chi comunica con chi</h3>
-      <div class="flowbar">
-        <span class="flowhint">server (multi):</span>
-        <div class="flowtabs" id="flowHosts"></div>
-        <div class="toggles" id="flowDir"></div>
-      </div>
-    </div>
-    <div class="snk" id="flowSnk"></div>
-  </div>
-
-  <!-- Security Activity Dashboard (SAI) -->
+  <!-- Security Activity Dashboard (SAI) — al posto delle strip rete/sicurezza -->
   <div class="secdash">
     <div class="panel-head">
       <h3>Sicurezza — Security Activity Dashboard</h3>
@@ -618,6 +582,19 @@
       <div class="ffilters" id="secFilters"></div>
       <div class="evlist" id="secEvents"></div>
     </div>
+  </div>
+
+  <!-- flussi di rete (chi comunica con chi, su quali porte) -->
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Flussi di rete — chi comunica con chi</h3>
+      <div class="flowbar">
+        <span class="flowhint">server (multi):</span>
+        <div class="flowtabs" id="flowHosts"></div>
+        <div class="toggles" id="flowDir"></div>
+      </div>
+    </div>
+    <div class="snk" id="flowSnk"></div>
   </div>
 
 </div>
@@ -718,9 +695,7 @@ let HOST_COLOR = {};
 function colorFor(h,i){ if(!(h in HOST_COLOR)) HOST_COLOR[h]=PALETTE[i%PALETTE.length]; return HOST_COLOR[h]; }
 
 // ------------------------------------------------------------ stato UI
-let netMetric = "rx";     // rx | tx
-let secMetric = "fw";     // fw | ssh
-let winMin = 60;          // finestra in minuti
+let winMin = 60;          // finestra in minuti (usata dalla dashboard Docker)
 const REFRESH = 5000;
 let ME = null;            // utente corrente {name, role}
 
@@ -1142,6 +1117,7 @@ function hostCard(name, d){
   const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
   const ram=d.ram, rp = ram.total? ram.used/ram.total*100 : 0;
   const disks=(d.disk||[]);
+  const r = d.rates||{};
   const diskRows = disks.map(dk=>`
     <div class="metric"><div class="label">${dk.target} <small>${dk.fstype||""}</small></div>
       <div class="val">${pct(dk.use_pct)}
@@ -1158,6 +1134,12 @@ function hostCard(name, d){
       <div class="metric"><div class="label">Swap · Conn. ESTAB</div>
         <div class="val">${hbytes(ram.swap_used)} <small>/ ${hbytes(ram.swap_total)}</small></div>
         <div class="val" style="margin-top:6px">${(d.conns||{}).estab ?? "—"} <small>conn.</small></div></div>
+    </div>
+    <div class="grid2" style="margin-top:8px">
+      <div class="metric"><div class="label">Rete ↓ RX</div>
+        <div class="val">${hrate(r.net_rx_rate)}</div></div>
+      <div class="metric"><div class="label">Rete ↑ TX</div>
+        <div class="val">${hrate(r.net_tx_rate)}</div></div>
     </div>
     <section><h3>Disco</h3>${diskRows}</section>
   </div>`;
@@ -1424,10 +1406,7 @@ function lastNonNull(pts){ for(let i=pts.length-1;i>=0;i--){ if(pts[i][1]!=null)
 
 // ------------------------------------------------------------ render toggles/presets
 function renderToggles(){
-  document.getElementById("netTg").innerHTML =
-    [["rx","↓ RX"],["tx","↑ TX"]].map(([k,l])=>`<span class="tg ${netMetric===k?'on':''}" data-net="${k}">${l}</span>`).join("");
-  document.getElementById("secTg").innerHTML =
-    [["fw","Firewall drop/min"],["ssh","SSH falliti/1h"]].map(([k,l])=>`<span class="tg ${secMetric===k?'on':''}" data-sec="${k}">${l}</span>`).join("");
+  // preset finestra temporale (usata dalla dashboard Docker)
   document.getElementById("presets").innerHTML =
     [15,60,180,360,1440,2880].map(m=>`<span class="tg ${winMin===m?'on':''}" data-win="${m}">${winLabel(m)}</span>`).join("");
 }
@@ -1693,17 +1672,6 @@ function redraw(){
   cardsEl.innerHTML = HOSTS.map(h=>hostCard(h, LATEST[h])).join("")
     + `<div class="addcard" data-add="1"><div class="plus">+</div><div>Aggiungi<br>server</div></div>`;
   cardsEl.scrollLeft = sl;
-  // rete
-  const netField = netMetric==="rx" ? "net_rx_rate" : "net_tx_rate";
-  drawChart(document.getElementById("netChart"), document.getElementById("netTip"),
-            seriesFor(netField), v=>hrate(v));
-  renderLegend("netLeg", netField, v=>hrate(v));
-  // sicurezza
-  const secField = secMetric==="fw" ? "fw_drop_rate" : "ssh_failed_1h";
-  const secFmt = secMetric==="fw" ? (v=>v==null?"—":v.toFixed(0)+" /min") : (v=>v==null?"—":v.toFixed(0)+" /h");
-  drawChart(document.getElementById("secChart"), document.getElementById("secTip"),
-            seriesFor(secField), v=>secMetric==="fw"? v.toFixed(0) : v.toFixed(0));
-  renderLegend("secLeg", secField, secFmt);
   // flussi di rete (Sankey)
   renderFlow();
   // dashboard Docker aperta? aggiorna
@@ -1722,20 +1690,16 @@ async function refresh(){
   catch(e){ document.getElementById("meta").textContent="collector irraggiungibile"; return; }
   HOSTS = latest.hosts; LATEST = latest.data;
   HOSTS.forEach((h,i)=>colorFor(h,i));
-  try{ HIST = await (await fetch("/api/history?minutes="+winMin)).json(); }
-  catch(e){ HIST = HIST||{}; }
   redraw();
   document.getElementById("meta").textContent =
-    `aggiornato ${new Date().toLocaleTimeString()} · poll ${latest.interval}s · finestra ${winLabel(winMin)} · ${HOSTS.length} server`;
+    `aggiornato ${new Date().toLocaleTimeString()} · poll ${latest.interval}s · ${HOSTS.length} server`;
 }
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx]");
+  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx]");
   if(!t) return;
-  if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
-  else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
-  else if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
+  if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
                           document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); refresh(); }
   else if(t.dataset.enh){ toggleHost(t.dataset.enh); redraw(); }
   else if(t.dataset.csort){ const k=t.dataset.csort;
