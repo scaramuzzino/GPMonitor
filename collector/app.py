@@ -23,9 +23,105 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.9"
-BUILD_DATE = "2026-08-23"
+import io, tarfile
+VERSION = "v3.0"
+BUILD_DATE = "2026-08-23 16:10"
 AUTHOR = "Stefano Scaramuzzino"
+REPORT_EMAIL = os.environ.get("MON_REPORT_EMAIL", "stefano.scaramuzzino@gmail.com")
+
+# ---- template per il pacchetto di deploy scaricabile (GET /api/deploy) ----
+DEPLOY_DOCKERFILE = """FROM python:3.12-slim
+RUN apt-get update \\
+ && apt-get install -y --no-install-recommends openssh-client sshpass nmap \\
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY app.py dashboard.html login.html monitor-probe.py monitor-probe-macos.py /app/
+EXPOSE 8888
+CMD ["python3", "-u", "/app/app.py"]
+"""
+
+DEPLOY_COMPOSE = """name: gpmon
+services:
+  gpmon:
+    build: .
+    image: gpmon:latest
+    container_name: gpmon
+    network_mode: host
+    restart: unless-stopped
+    cap_add: [NET_RAW, NET_ADMIN]
+    environment:
+      # nome=utente@ip per ogni server da monitorare (IP Tailscale consigliati)
+      MON_HOSTS: "SRV1=root@100.0.0.1,SRV2=user@100.0.0.2"
+      # la web ascolta SOLO su questo indirizzo: metti l'IP (Tailscale) di QUESTA macchina
+      MON_BIND: "127.0.0.1:8888"
+      MON_INTERVAL: "15"
+      MON_RETENTION_HOURS: "48"
+      MON_NMAP: "1"
+      MON_NMAP_DEEP: "0"
+      MON_NMAP_VULN: "0"
+      MON_REPORT_EMAIL: "tuo@email"
+      MON_SSH_KEY: "/app/ssh/monitor_ed25519"
+      MON_DATA_DIR: "/app/data"
+    volumes:
+      - ./ssh:/app/ssh:ro
+      - ./data:/app/data
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "3"}
+"""
+
+DEPLOY_INSTALL = """#!/usr/bin/env bash
+# Installer semplice e diretto di GPMonitor (Docker). Uso: ./install.sh
+set -e
+cd "$(cd "$(dirname "$0")" && pwd)/collector"
+echo "==> Controllo Docker..."
+if ! command -v docker >/dev/null 2>&1; then
+  echo "    Docker non presente: lo installo da get.docker.com ..."
+  curl -fsSL https://get.docker.com | sh
+fi
+echo "==> Chiave di monitoraggio (genero se assente)..."
+mkdir -p ssh data
+if [ ! -f ssh/monitor_ed25519 ]; then
+  ssh-keygen -t ed25519 -N "" -f ssh/monitor_ed25519 -C "gpmon@$(hostname)"
+fi
+echo "==> Avvio GPMonitor (build + up)..."
+docker compose up -d --build
+echo
+echo "FATTO. GPMonitor e' attivo."
+echo "1) Modifica collector/docker-compose.yml -> MON_HOSTS (i tuoi server) e MON_BIND (IP di ascolto)."
+echo "2) Sui server da monitorare, installa la sonda a comando forzato con la chiave qui sotto"
+echo "   (vedi README.md, sezione 'Sonda a comando forzato')."
+echo "3) Applica: cd collector && docker compose up -d"
+echo
+echo "Chiave PUBBLICA di monitoraggio da distribuire ai server:"
+cat ssh/monitor_ed25519.pub
+"""
+
+DEPLOY_README = """# GPMonitor - installazione
+
+Monitoraggio **agentless** (nessun agente installato sui target: solo la sonda via SSH a comando forzato) e 100%% on-premise (solo stdlib Python, niente pip/CDN).
+
+## Installazione rapida
+1. Estrai l'archivio ed entra nella cartella:  `tar xzf gpmonitor-deploy.tar.gz && cd gpmonitor`
+2. Lancia:  `./install.sh`  (installa Docker se manca, genera la chiave, fa `docker compose up -d --build`)
+3. Modifica `collector/docker-compose.yml`:
+   - `MON_HOSTS`: elenco `nome=utente@ip` dei server (IP Tailscale consigliati)
+   - `MON_BIND`: l'IP su cui esporre la web (metti l'IP Tailscale di questa macchina, mai 0.0.0.0 su reti non fidate)
+   - `MON_REPORT_EMAIL`: destinatario di report/avvisi (poi modificabile anche da Config)
+4. Applica:  `cd collector && docker compose up -d`
+
+## Sonda a comando forzato (sui server da monitorare)
+Aggiungi in `~/.ssh/authorized_keys` dell'utente target (es. root):
+
+    command="/usr/local/bin/monitor-probe.py",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding <CHIAVE_PUBBLICA>
+
+e copia `collector/monitor-probe.py` in `/usr/local/bin/` (755). Per i Mac usa `monitor-probe-macos.py`.
+La chiave pubblica e' in `collector/ssh/monitor_ed25519.pub` (la stampa anche install.sh).
+
+## Primo accesso
+Apri `http://<MON_BIND>` : il **primo utente** che si registra diventa admin.
+"""
 
 # ---------------------------------------------------------------- config
 def parse_hosts(spec):
@@ -184,13 +280,18 @@ def set_setting(k, v):
 
 def load_settings():
     """Impostazioni runtime persistite in kv. Al primo avvio semina da env."""
-    global NMAP_VULN
+    global NMAP_VULN, REPORT_EMAIL
     with db() as c:
         row = c.execute("SELECT v FROM kv WHERE k='nmap_vuln'").fetchone()
+        rowe = c.execute("SELECT v FROM kv WHERE k='report_email'").fetchone()
     if row is None:
         set_setting("nmap_vuln", "1" if NMAP_VULN else "0")  # semina dal default env
     else:
         NMAP_VULN = (row["v"] == "1")
+    if rowe is None:
+        set_setting("report_email", REPORT_EMAIL)             # semina dal default env
+    elif rowe["v"]:
+        REPORT_EMAIL = rowe["v"]
 
 
 def hash_pw(pw, salt_hex):
@@ -906,6 +1007,37 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._send(500, "%s non trovato" % fname, "text/plain")
 
+    def _serve_deploy(self):
+        """Costruisce e invia gpmonitor-deploy.tar.gz: sorgenti + Dockerfile/compose/install.sh/README."""
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        srcs = ["app.py", "dashboard.html", "login.html", "monitor-probe.py", "monitor-probe-macos.py"]
+        buf = io.BytesIO()
+        now = int(time.time())
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            for fn in srcs:
+                p = os.path.join(app_dir, fn)
+                if os.path.exists(p):
+                    tar.add(p, arcname="gpmonitor/collector/" + fn)
+            def add_str(name, text, mode=0o644):
+                data = text.encode("utf-8")
+                ti = tarfile.TarInfo("gpmonitor/" + name)
+                ti.size = len(data); ti.mode = mode; ti.mtime = now
+                tar.addfile(ti, io.BytesIO(data))
+            add_str("collector/Dockerfile", DEPLOY_DOCKERFILE)
+            add_str("collector/docker-compose.yml", DEPLOY_COMPOSE)
+            add_str("install.sh", DEPLOY_INSTALL, mode=0o755)
+            add_str("README.md", DEPLOY_README)
+        data = buf.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Disposition", 'attachment; filename="gpmonitor-deploy.tar.gz"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except Exception:
+            pass
+
     def do_GET(self):
         u = urlparse(self.path)
         # rotte pubbliche (pagina di login / stato auth)
@@ -924,6 +1056,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path == "/api/me":
             return self._json(200, dict(user, version=VERSION, build=BUILD_DATE, author=AUTHOR))
+        if u.path == "/api/deploy":
+            if user["role"] != "admin":
+                return self._json(403, {"error": "richiede admin"})
+            return self._serve_deploy()
         if u.path == "/api/users":
             if user["role"] != "admin":
                 return self._json(403, {"error": "richiede admin"})
@@ -977,7 +1113,7 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/settings":
             self._json(200, {"nmap_enabled": NMAP_ENABLED, "nmap_vuln": NMAP_VULN,
                              "nmap_deep": NMAP_DEEP, "nmap_top_ports": NMAP_TOP_PORTS,
-                             "nmap_interval_hours": NMAP_INTERVAL_H})
+                             "nmap_interval_hours": NMAP_INTERVAL_H, "report_email": REPORT_EMAIL})
         elif u.path == "/api/scans":
             # riepiloghi per il KPI di sicurezza RAG delle card (tutti gli host)
             now = int(time.time())
@@ -1171,14 +1307,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True, "hosts": self._hosts_list()})
 
         if u.path == "/api/settings":
-            global NMAP_VULN
+            global NMAP_VULN, REPORT_EMAIL
             if user["role"] != "admin":
                 return self._json(403, {"error": "richiede admin"})
             b = self._read_json()
             if "nmap_vuln" in b:
                 NMAP_VULN = bool(b.get("nmap_vuln"))
                 set_setting("nmap_vuln", "1" if NMAP_VULN else "0")
-            return self._json(200, {"ok": True, "nmap_vuln": NMAP_VULN})
+            if "report_email" in b:
+                em = (b.get("report_email") or "").strip()
+                if not em or "@" not in em or " " in em:
+                    return self._json(400, {"error": "email non valida"})
+                REPORT_EMAIL = em
+                set_setting("report_email", em)
+            return self._json(200, {"ok": True, "nmap_vuln": NMAP_VULN, "report_email": REPORT_EMAIL})
 
         if u.path == "/api/scan":
             if user["role"] != "admin":

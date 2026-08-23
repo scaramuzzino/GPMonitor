@@ -189,6 +189,10 @@
   /* ---- impostazioni (toggle CVE) ---- */
   .cfgset{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
   .cfgset .st{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+  .emlrow{display:flex;gap:6px;align-items:center}
+  .emlrow input{min-width:190px;background:#0d1117;border:1px solid var(--line);color:var(--fg);border-radius:7px;padding:5px 9px;font-size:12.5px}
+  .dlbtn{display:inline-block;padding:6px 13px;background:var(--accent);color:#fff;border-radius:7px;text-decoration:none;font-size:12.5px;font-weight:600;white-space:nowrap}
+  .dlbtn:hover{filter:brightness(1.12)}
   .setrow{display:flex;align-items:flex-start;gap:12px;padding:6px 0}
   .setrow .txt{flex:1}
   .setrow .txt b{font-size:13px}
@@ -1457,18 +1461,50 @@ async function loadSettings(){
   if(!(ME&&ME.role==="admin")){ el.innerHTML=""; return; }
   try{
     const s=await (await fetch("/api/settings")).json();
-    if(!s.nmap_enabled){ el.innerHTML=""; return; }
-    el.innerHTML=`<div class="cfgset"><div class="st">Scansione nmap</div>
+    let html="";
+    // Report & Avvisi: email destinatario
+    html+=`<div class="cfgset"><div class="st">Report &amp; Avvisi</div>
       <div class="setrow">
-        <div class="txt"><b>Correlazione CVE (vulners)</b>
-          <small>Innesta lo script NSE <b>vulners</b> (CPE→CVE) per elencare le vulnerabilità note dei servizi.
-          ⚠ Interroga <b>vulners.com</b> via internet: non è più 100% on-premise.
-          ${s.nmap_deep?"Scansione a profondità piena (tutte le porte).":""}</small></div>
-        <label class="sw" id="swVulnW"><input type="checkbox" id="swVuln" ${s.nmap_vuln?"checked":""}>
-          <span class="track"></span><span class="knob"></span></label>
+        <div class="txt"><b>Email destinatario</b>
+          <small>Dove arrivano il report giornaliero e gli avvisi del watchdog.</small></div>
+        <div class="emlrow"><input id="repEmail" value="${escapeHtml(s.report_email||"")}" placeholder="tuo@email">
+          <button id="repEmailSave">Salva</button></div>
       </div></div>`;
-    document.getElementById("swVuln").addEventListener("change", toggleVuln);
+    // Installazione: download deploy
+    html+=`<div class="cfgset"><div class="st">Installazione</div>
+      <div class="setrow">
+        <div class="txt"><b>Deploy Docker</b>
+          <small>Scarica il pacchetto per installare GPMonitor su un'altra macchina
+          (Dockerfile + compose + <code>install.sh</code>, semplice e diretto).</small></div>
+        <a class="dlbtn" href="/api/deploy" download>⬇ Scarica deploy</a>
+      </div></div>`;
+    // Scansione nmap (solo se abilitata)
+    if(s.nmap_enabled){
+      html+=`<div class="cfgset"><div class="st">Scansione nmap</div>
+        <div class="setrow">
+          <div class="txt"><b>Correlazione CVE (vulners)</b>
+            <small>Innesta lo script NSE <b>vulners</b> (CPE→CVE) per elencare le vulnerabilità note dei servizi.
+            ⚠ Interroga <b>vulners.com</b> via internet: non è più 100% on-premise.
+            ${s.nmap_deep?"Scansione a profondità piena (tutte le porte).":""}</small></div>
+          <label class="sw" id="swVulnW"><input type="checkbox" id="swVuln" ${s.nmap_vuln?"checked":""}>
+            <span class="track"></span><span class="knob"></span></label>
+        </div></div>`;
+    }
+    el.innerHTML=html;
+    const rb=document.getElementById("repEmailSave"); if(rb) rb.addEventListener("click", saveReportEmail);
+    const sv=document.getElementById("swVuln"); if(sv) sv.addEventListener("change", toggleVuln);
   }catch(e){ el.innerHTML=""; }
+}
+async function saveReportEmail(){
+  const v=(document.getElementById("repEmail").value||"").trim();
+  const m=document.getElementById("cfgMsg");
+  try{
+    const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({report_email:v})});
+    const j=await r.json();
+    if(r.ok){ m.textContent="✓ Email salvata: "+j.report_email; m.className="msg ok"; }
+    else{ m.textContent="⚠ "+(j.error||"errore"); m.className="msg err"; }
+  }catch(e){ m.textContent="⚠ errore di rete"; m.className="msg err"; }
 }
 async function toggleVuln(e){
   const on=e.target.checked, wrap=document.getElementById("swVulnW");
@@ -1978,8 +2014,8 @@ async function loadMe(){
     document.getElementById("usersBtn").style.display = ME.role==="admin" ? "" : "none";
     if(ME.version){
       const vb=document.getElementById("ver");
-      vb.textContent = ME.version;
-      vb.title = "build "+(ME.build||"");
+      vb.textContent = ME.version + (ME.build ? " · "+ME.build : "");
+      vb.title = "rilascio "+(ME.build||"")+(ME.author?" · "+ME.author:"");
     }
   }catch(e){}
 }
