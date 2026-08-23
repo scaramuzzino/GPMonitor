@@ -416,7 +416,23 @@
     text-align:center;position:relative;overflow:hidden}
   .dtile .dtv{font-size:28px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
   .dtile .dtl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
-  .dtile .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:24px;display:block}
+  .dtile .dtv,.dtile .dtl{position:relative;z-index:1}
+  .dtile .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:34px;display:block;opacity:.85}
+  .dcharts2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.dcharts2{grid-template-columns:1fr}}
+  .dleg{display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:11px;color:var(--mut)}
+  .dleg .it{display:inline-flex;align-items:center;gap:5px}
+  .dleg .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+  table.dstat{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+  table.dstat th{color:var(--mut);font-weight:500;font-size:10px;text-transform:uppercase;text-align:right;padding:3px 6px;border-bottom:1px solid var(--line)}
+  table.dstat th:first-child{text-align:left}
+  table.dstat td{text-align:right;padding:4px 6px;font-variant-numeric:tabular-nums;border-bottom:1px solid #1b2129}
+  table.dstat td:first-child{text-align:left;color:var(--fg)}
+  table.dstat td .sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:middle}
+  .heat{width:100%;overflow-x:auto}
+  .heatleg{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:6px;font-size:10px;color:var(--mut)}
+  .heatleg .grad{width:120px;height:9px;border-radius:3px;
+    background:linear-gradient(90deg,rgb(43,131,186),rgb(102,194,165),rgb(166,217,106),rgb(255,255,191),rgb(253,174,97),rgb(215,25,28))}
   .dcharts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   @media(max-width:900px){.dcharts{grid-template-columns:1fr}}
   .dpanel{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:10px 12px 12px}
@@ -631,7 +647,8 @@ function winLabel(m){ if(m<60) return m+"m"; if(m%60===0) return (m/60)+"h"; ret
 
 // ------------------------------------------------------------ grafico multi-linea nel tempo
 // series: [{name,color,pts:[[t,v],...]}]  ; valfmt(v)->string
-function drawChart(box, tip, series, valfmt){
+function drawChart(box, tip, series, valfmt, opts){
+  opts = opts || {};
   const w = Math.max(320, box.clientWidth), h = 168;
   const pad = {l:52, r:12, t:12, b:22};
   const now = Math.floor(Date.now()/1000);
@@ -660,6 +677,10 @@ function drawChart(box, tip, series, valfmt){
     const inWin = s.pts.filter(p=>p[0]>=t0-2 && p[1]!=null);
     if(inWin.length<2) return;
     const pts = inWin.map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join(" ");
+    if(opts.fill){
+      const x0=X(inWin[0][0]).toFixed(1), x1=X(inWin[inWin.length-1][0]).toFixed(1), yb=(h-pad.b).toFixed(1);
+      paths += `<polygon points="${x0},${yb} ${pts} ${x1},${yb}" fill="${s.color}" fill-opacity="0.15"/>`;
+    }
     paths += `<polyline fill="none" stroke="${s.color}" stroke-width="1.7" points="${pts}"/>`;
   });
   const cross = `<line id="cx" x1="0" y1="${pad.t}" x2="0" y2="${h-pad.b}" stroke="#8b949e" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>`;
@@ -690,6 +711,69 @@ function drawChart(box, tip, series, valfmt){
   }
   svg.onmousemove = move;
   svg.onmouseleave = ()=>{ cx.style.display="none"; tip.style.display="none"; };
+}
+
+// grafico a barre verticali (bucket temporali) — stile Grafana "Total Requests"
+function drawBars(box, pts, valfmt, color){
+  const w=Math.max(320, box.clientWidth), h=168, pad={l:52,r:12,t:12,b:22};
+  const now=Math.floor(Date.now()/1000), t1=now, t0=now-winMin*60;
+  const N=Math.min(52, Math.max(12, Math.floor((w-pad.l-pad.r)/13)));
+  const bk=new Array(N).fill(null).map(()=>({s:0,n:0}));
+  pts.forEach(p=>{ if(p[1]==null) return; const i=Math.floor((p[0]-t0)/((t1-t0)/N)); if(i>=0&&i<N){bk[i].s+=p[1];bk[i].n++;} });
+  const vals=bk.map(b=>b.n?b.s/b.n:null);
+  let vmax=0; vals.forEach(v=>{ if(v!=null&&v>vmax)vmax=v; }); vmax=vmax>0?vmax*1.12:1;
+  const Y=v=>h-pad.b-(v/vmax)*(h-pad.t-pad.b), bw=(w-pad.l-pad.r)/N;
+  let grid="",yl="";
+  for(let i=0;i<=4;i++){ const v=vmax*i/4,y=Y(v);
+    grid+=`<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${w-pad.r}" y2="${y.toFixed(1)}" stroke="#21262d"/>`;
+    yl+=`<text x="${pad.l-6}" y="${(y+3).toFixed(1)}" fill="#8b949e" font-size="10" text-anchor="end">${valfmt(v)}</text>`; }
+  let xl=""; const small=winMin<=60;
+  for(let i=0;i<=4;i++){ const t=t0+(t1-t0)*i/4, x=pad.l+(t-t0)/(t1-t0)*(w-pad.l-pad.r);
+    xl+=`<text x="${x.toFixed(1)}" y="${h-6}" fill="#8b949e" font-size="10" text-anchor="middle">${small?hms(t):hm(t)}</text>`; }
+  let bars="";
+  vals.forEach((v,i)=>{ if(v==null)return; const x=pad.l+i*bw+1, y=Y(v), bh=Math.max(0,h-pad.b-y);
+    bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1.5,bw-2).toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" rx="1"><title>${valfmt(v)}</title></rect>`; });
+  box.querySelector('svg')?.remove();
+  box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${w} ${h}" height="${h}">${grid+yl+xl+bars}</svg>`);
+}
+
+// scala colori heatmap (blu→ciano→verde→giallo→arancio→rosso)
+function heatColor(f){
+  f=Math.max(0,Math.min(1,f));
+  const st=[[43,131,186],[102,194,165],[166,217,106],[255,255,191],[253,174,97],[215,25,28]];
+  const seg=f*(st.length-1), i=Math.min(st.length-2,Math.floor(seg)), t=seg-i, a=st[i], b=st[i+1];
+  const c=k=>Math.round(a[k]+(b[k]-a[k])*t);
+  return `rgb(${c(0)},${c(1)},${c(2)})`;
+}
+// heatmap: righe = metriche, colonne = bucket temporali, colore = intensità (0..max riga)
+function drawHeatmap(box, rows){
+  const w=Math.max(360, box.clientWidth), pad={l:104,r:10,t:8,b:20};
+  const now=Math.floor(Date.now()/1000), t1=now, t0=now-winMin*60;
+  const N=Math.min(56, Math.max(16, Math.floor((w-pad.l-pad.r)/15)));
+  const rowH=24, gap=3, H=pad.t+pad.b+rows.length*(rowH+gap), cw=(w-pad.l-pad.r)/N;
+  let cells="",labels="";
+  rows.forEach((r,ri)=>{
+    const bk=new Array(N).fill(null).map(()=>({s:0,n:0}));
+    (r.pts||[]).forEach(p=>{ if(p[1]==null)return; const i=Math.floor((p[0]-t0)/((t1-t0)/N)); if(i>=0&&i<N){bk[i].s+=p[1];bk[i].n++;} });
+    let mx=r.max; if(mx==null){ mx=0; bk.forEach(b=>{ if(b.n){const v=b.s/b.n; if(v>mx)mx=v;} }); } mx=mx||1;
+    const y=pad.t+ri*(rowH+gap);
+    labels+=`<text x="${pad.l-8}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="end" fill="#c9d1d9" font-size="11">${escapeHtml(r.label)}</text>`;
+    bk.forEach((b,i)=>{ const x=pad.l+i*cw;
+      if(!b.n){ cells+=`<rect x="${x.toFixed(1)}" y="${y}" width="${cw.toFixed(1)}" height="${rowH}" fill="#161b22"/>`; return; }
+      const v=b.s/b.n, f=mx?v/mx:0;
+      cells+=`<rect x="${x.toFixed(1)}" y="${y}" width="${Math.max(0.5,cw-1).toFixed(1)}" height="${rowH}" fill="${heatColor(f)}"><title>${escapeHtml(r.label)}: ${r.fmt?r.fmt(v):v.toFixed(0)}</title></rect>`; });
+  });
+  let xl=""; for(let i=0;i<=4;i++){ const t=t0+(t1-t0)*i/4, x=pad.l+(w-pad.l-pad.r)*i/4;
+    xl+=`<text x="${x.toFixed(1)}" y="${H-6}" fill="#8b949e" font-size="10" text-anchor="middle">${winMin<=60?hms(t):hm(t)}</text>`; }
+  box.innerHTML=`<svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}">${cells}${labels}${xl}</svg>`;
+}
+
+// min/max/avg/ultimo su una serie (per il pannello statistiche stile percentili)
+function statSummary(pts){
+  const v=pts.filter(p=>p[1]!=null).map(p=>p[1]);
+  if(!v.length) return null;
+  let mn=v[0],mx=v[0],s=0; v.forEach(x=>{ if(x<mn)mn=x; if(x>mx)mx=x; s+=x; });
+  return {min:mn,max:mx,avg:s/v.length,last:v[v.length-1]};
 }
 
 // ------------------------------------------------------------ Sankey flussi di rete
@@ -1070,33 +1154,67 @@ function renderDockerDash(){
   const pidTot=conts.reduce((s,c)=>s+(c.pids||0),0);
   if(sub) sub.innerHTML = `${escapeHtml(d.host||"")} · ${ago(d.ts)} · finestra ${winLabel(winMin)}`;
 
-  // sparkline dallo storico
-  const spCpu=sparkSvg(DOCK_HIST.map(r=>[r.ts,r.dock_cpu]), "#58a6ff");
-  const spMem=sparkSvg(DOCK_HIST.map(r=>[r.ts,r.dock_mem]), "#3fb950");
+  const tot=conts.length, pctRun = tot? runN/tot*100 : 0;
+  // serie storiche
+  const cpuPts=DOCK_HIST.map(r=>[r.ts,r.dock_cpu]),  memPts=DOCK_HIST.map(r=>[r.ts,r.dock_mem]);
+  const runPts=DOCK_HIST.map(r=>[r.ts,r.cont_running]), totPts=DOCK_HIST.map(r=>[r.ts,r.cont_total]);
+  const rxPts =DOCK_HIST.map(r=>[r.ts,r.net_rx_rate]), txPts =DOCK_HIST.map(r=>[r.ts,r.net_tx_rate]);
+  const estabPts=DOCK_HIST.map(r=>[r.ts,r.estab]);
+  // sparkline di sfondo per le tile
+  const spCpu=sparkSvg(cpuPts,"#58a6ff"), spMem=sparkSvg(memPts,"#3fb950"),
+        spRun=sparkSvg(runPts,"#3fb950"), spNet=sparkSvg(rxPts,"#bc8cff");
 
-  // --- Overview: 9 stat-tile con numeroni (stile Grafana)
+  // --- Panoramica: riga di stat-tile numeroni (stile Grafana), con sparkline di sfondo
   const overview = `<div class="dsec"><div class="dsec-h">Panoramica</div>
     <div class="dtiles">
-      ${dtile(conts.length, "Container")}
-      ${dtile(runN, "Attivi", "var(--ok)")}
+      ${dtile(tot, "Container")}
+      ${dtile(pctRun.toFixed(0)+"%", "% Attivi", "var(--ok)", spRun)}
+      ${dtile(runN, "Attivi (ora)", "var(--ok)")}
       ${dtile(stopN, "Fermi", stopN?"var(--bad)":"#8b949e")}
       ${dtile(warnN, "Problemi", warnN?"var(--warn)":"#8b949e")}
-      ${dtile(imgs!=null?imgs:"—", "Immagini")}
       ${dtile(cpuUtil.toFixed(0)+"%", "CPU util.", pbarcol(cpuUtil), spCpu)}
       ${dtile(memSum.toFixed(0)+"%", "MEM util.", pbarcol(memSum), spMem)}
-      ${dtile(pidTot, "PID totali")}
-      ${dtile(cpus!=null?cpus:"—", "Core CPU")}
+      ${dtile(hrate(lastNonNull(rxPts)), "Rete RX", "#bc8cff", spNet)}
+      ${dtile(pidTot, "PID")}
+      ${dtile(imgs!=null?imgs:"—", "Immagini")}
+      ${dtile(cpus!=null?cpus:"—", "Core")}
     </div></div>`;
 
-  // --- Serie temporali (3 pannelli) alimentate da /api/history
-  const charts = `<div class="dsec"><div class="dsec-h">Andamento (${winLabel(winMin)})</div>
+  // --- Andamento: 3 pannelli (area riempita · multilinea con legenda · barre)
+  const charts = `<div class="dsec"><div class="dsec-h">Andamento · ${winLabel(winMin)}</div>
     <div class="dcharts">
       <div class="dpanel"><div class="dpt">CPU util. aggregata</div>
         <div class="chart" id="dChartCpu"></div><div class="tip" id="dTipCpu"></div></div>
-      <div class="dpanel"><div class="dpt">MEM util. aggregata</div>
-        <div class="chart" id="dChartMem"></div><div class="tip" id="dTipMem"></div></div>
       <div class="dpanel"><div class="dpt">Container attivi / totali</div>
-        <div class="chart" id="dChartCont"></div><div class="tip" id="dTipCont"></div></div>
+        <div class="chart" id="dChartCont"></div><div class="tip" id="dTipCont"></div>
+        <div class="dleg"><span class="it"><span class="sw" style="background:#3fb950"></span>attivi</span><span class="it"><span class="sw" style="background:#8b949e"></span>totali</span></div></div>
+      <div class="dpanel"><div class="dpt">Rete in ingresso (RX)</div>
+        <div class="chart" id="dBarsRx"></div></div>
+    </div></div>`;
+
+  // --- Carico: statistiche (min/max/media) + heatmap intensità (righe metriche × tempo)
+  const scpu=statSummary(cpuPts), smem=statSummary(memPts);
+  const pf=v=>v==null?"—":v.toFixed(0)+"%";
+  const statRow=(lbl,col,s)=>`<tr><td><span class="sw" style="background:${col}"></span>${lbl}</td>
+    <td>${s?pf(s.min):"—"}</td><td>${s?pf(s.max):"—"}</td><td>${s?pf(s.avg):"—"}</td><td><b>${s?pf(s.last):"—"}</b></td></tr>`;
+  const carico = `<div class="dsec"><div class="dsec-h">Carico</div>
+    <div class="dcharts2">
+      <div class="dpanel"><div class="dpt">CPU / MEM util. — statistiche</div>
+        <div class="chart" id="dChartLoad"></div><div class="tip" id="dTipLoad"></div>
+        <table class="dstat"><thead><tr><th></th><th>min</th><th>max</th><th>media</th><th>ora</th></tr></thead>
+          <tbody>${statRow("CPU","#58a6ff",scpu)}${statRow("MEM","#3fb950",smem)}</tbody></table></div>
+      <div class="dpanel"><div class="dpt">Heatmap intensità</div>
+        <div class="heat" id="dHeat"></div>
+        <div class="heatleg"><span>basso</span><span class="grad"></span><span>alto</span></div></div>
+    </div></div>`;
+
+  // --- Rete & Connessioni: barre TX (viola) + area ESTAB (oro)
+  const conns = `<div class="dsec"><div class="dsec-h">Rete &amp; Connessioni</div>
+    <div class="dcharts2">
+      <div class="dpanel"><div class="dpt">Rete in uscita (TX)</div>
+        <div class="chart" id="dBarsTx"></div></div>
+      <div class="dpanel"><div class="dpt">Connessioni ESTAB aperte</div>
+        <div class="chart" id="dAreaConn"></div><div class="tip" id="dTipConn"></div></div>
     </div></div>`;
 
   // --- Risorse per container: barre CPU e MEM ordinate
@@ -1143,18 +1261,35 @@ function renderDockerDash(){
       <th class="num" data-csort="mem">MEM${arr('mem')}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
-  body.innerHTML = overview + charts + bars + table;
+  body.innerHTML = overview + charts + carico + conns + bars + table;
 
-  // disegno i grafici temporali (dopo l'inserimento dell'HTML)
-  const cpuFmt=v=>v==null?"—":v.toFixed(0)+"%", contFmt=v=>v==null?"—":v.toFixed(0);
+  // disegno grafici/heatmap dopo l'inserimento dell'HTML
+  const pctFmt=v=>v==null?"—":v.toFixed(0)+"%", numFmt=v=>v==null?"—":v.toFixed(0);
+  // Andamento
   drawChart(document.getElementById("dChartCpu"), document.getElementById("dTipCpu"),
-            [{name:"CPU util.", color:"#58a6ff", pts:DOCK_HIST.map(r=>[r.ts, r.dock_cpu])}], cpuFmt);
-  drawChart(document.getElementById("dChartMem"), document.getElementById("dTipMem"),
-            [{name:"MEM util.", color:"#3fb950", pts:DOCK_HIST.map(r=>[r.ts, r.dock_mem])}], cpuFmt);
+            [{name:"CPU util.", color:"#f0883e", pts:cpuPts}], pctFmt, {fill:true});
   drawChart(document.getElementById("dChartCont"), document.getElementById("dTipCont"),
-            [{name:"attivi", color:"#3fb950", pts:DOCK_HIST.map(r=>[r.ts, r.cont_running])},
-             {name:"totali", color:"#8b949e", pts:DOCK_HIST.map(r=>[r.ts, r.cont_total])}], contFmt);
+            [{name:"attivi", color:"#3fb950", pts:runPts},
+             {name:"totali", color:"#8b949e", pts:totPts}], numFmt);
+  drawBars(document.getElementById("dBarsRx"), rxPts, v=>hrate(v), "#3fb950");
+  // Carico
+  drawChart(document.getElementById("dChartLoad"), document.getElementById("dTipLoad"),
+            [{name:"CPU util.", color:"#58a6ff", pts:cpuPts},
+             {name:"MEM util.", color:"#3fb950", pts:memPts}], pctFmt);
+  drawHeatmap(document.getElementById("dHeat"), [
+    {label:"CPU util. %", pts:cpuPts, max:100, fmt:v=>v.toFixed(0)+"%"},
+    {label:"MEM util. %", pts:memPts, max:100, fmt:v=>v.toFixed(0)+"%"},
+    {label:"Rete RX",     pts:rxPts,  fmt:v=>hrate(v)},
+    {label:"Conn. ESTAB", pts:estabPts, fmt:v=>v.toFixed(0)},
+    {label:"Attivi",      pts:runPts, fmt:v=>v.toFixed(0)},
+  ]);
+  // Rete & Connessioni
+  drawBars(document.getElementById("dBarsTx"), txPts, v=>hrate(v), "#bc8cff");
+  drawChart(document.getElementById("dAreaConn"), document.getElementById("dTipConn"),
+            [{name:"ESTAB", color:"#d29922", pts:estabPts}], numFmt, {fill:true});
 }
+// ultimo valore non nullo di una serie [[ts,val],...]
+function lastNonNull(pts){ for(let i=pts.length-1;i>=0;i--){ if(pts[i][1]!=null) return pts[i][1]; } return null; }
 
 // ------------------------------------------------------------ render toggles/presets
 function renderToggles(){
