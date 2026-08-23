@@ -194,6 +194,12 @@ traffico legittimo non è mai candidato.
 
 ---
 
+## Contribuire
+
+I contributi sono benvenuti — vedi [CONTRIBUTING.md](CONTRIBUTING.md). In breve: resta
+**agentless**, **solo stdlib** (niente pip/CDN/framework), **on-premise** e **general-purpose**
+(nessun riferimento a installazioni specifiche, nessun segreto nei sorgenti).
+
 ## Licenza
 
 Rilasciato sotto licenza **MIT** (vedi [LICENSE](LICENSE)). Progetto open-source: usalo, modificalo

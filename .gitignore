@@ -12,3 +12,13 @@ __pycache__/
 *.tmp
 *.swp
 .DS_Store
+# ambienti / editor
+.env
+.env.*
+venv/
+.venv/
+.idea/
+.vscode/
+# log e artefatti di deploy
+*.log
+*.tar.gz
