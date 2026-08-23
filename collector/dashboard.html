@@ -25,7 +25,7 @@
   .cards{display:flex;gap:16px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
   .cards::-webkit-scrollbar{height:9px}
   .cards::-webkit-scrollbar-thumb{background:#30363d;border-radius:5px}
-  .card{position:relative;flex:0 0 320px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;scroll-snap-align:start}
+  .card{position:relative;flex:0 0 348px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;scroll-snap-align:start}
   .addcard{flex:0 0 132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
            border:1px dashed var(--line);border-radius:10px;color:var(--mut);cursor:pointer;background:#0d1117}
   .addcard:hover{border-color:var(--accent);color:var(--fg)}
@@ -389,6 +389,46 @@
   .seckpi.run .ring{animation:kpulse 1.15s ease-in-out infinite}
   @keyframes kpulse{0%,100%{box-shadow:0 0 0 4px var(--kglow),0 3px 10px rgba(0,0,0,.45)}
     50%{box-shadow:0 0 0 9px var(--kglow),0 3px 10px rgba(0,0,0,.45)}}
+  /* ---- pulsante Docker + semaforo RAG sulla card ---- */
+  .card h2 .dockbtn{font-size:10.5px;padding:2px 8px 2px 6px;border-radius:20px;border:1px solid var(--line);
+    color:var(--mut);cursor:pointer;background:#0d1117;display:inline-flex;align-items:center;gap:5px;line-height:1.6}
+  .card h2 .dockbtn svg{width:15px;height:11px}
+  .card h2 .dockbtn small{color:var(--fg);font-variant-numeric:tabular-nums}
+  .card h2 .dockbtn:hover{border-color:#2496ED;background:#0d2137}
+  .dockbtn .ragdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px var(--rag,transparent);background:var(--rag,#6e7681)}
+  .dockbtn.red  {--rag:#f85149} .dockbtn.amber{--rag:#e3b341}
+  .dockbtn.green{--rag:#3fb950} .dockbtn.grey {--rag:#6e7681}
+  /* ---- dashboard Docker (modale grande e centrale, stile Grafana) ---- */
+  .modal.dockdash{width:94vw;max-width:1180px;max-height:88vh;margin-top:5vh;padding:0;
+    display:flex;flex-direction:column;overflow:hidden}
+  .modal.dockdash .mhead{padding:14px 18px;margin:0;border-bottom:1px solid var(--line);gap:10px}
+  .modal.dockdash .mhead b{display:flex;align-items:center;gap:9px}
+  .modal.dockdash .mhead b svg{width:26px;height:18px}
+  .modal.dockdash .dsub{color:var(--mut);font-size:12px;font-family:ui-monospace,Menlo,monospace}
+  .dockbody{padding:16px 18px 22px;overflow:auto}
+  .dload{padding:40px 12px;text-align:center;color:var(--mut)}
+  .dsec{margin-bottom:20px}
+  .dsec-h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);
+    font-weight:600;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .dtiles{display:grid;grid-template-columns:repeat(9,1fr);gap:10px}
+  @media(max-width:1000px){.dtiles{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}}
+  .dtile{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:12px 10px 10px;
+    text-align:center;position:relative;overflow:hidden}
+  .dtile .dtv{font-size:28px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+  .dtile .dtl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .dtile .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:24px;display:block}
+  .dcharts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:900px){.dcharts{grid-template-columns:1fr}}
+  .dpanel{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:10px 12px 12px}
+  .dpt{font-size:12px;font-weight:600;color:var(--fg);margin-bottom:6px}
+  .dbars2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.dbars2{grid-template-columns:1fr}}
+  .dbar{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:12px}
+  .dbar .dbn{flex:0 0 40%;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dbar .dbt{flex:1;height:8px;border-radius:4px;background:#21262d;overflow:hidden}
+  .dbar .dbt>i{display:block;height:100%}
+  .dbar .dbv{flex:0 0 52px;text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
+  .modal.dockdash .ctab{width:100%}
   .scan-scanning{text-align:center;padding:34px 10px;color:var(--mut)}
   .scan-scanning b{color:var(--fg)}
   .radar{width:120px;height:120px;margin:0 auto 16px;border-radius:50%;position:relative;
@@ -467,12 +507,13 @@
     <div class="snk" id="flowSnk"></div>
   </div>
 
-  <!-- docker per server -->
-  <div>
-    <div class="panel-head" style="padding:0 2px 6px">
-      <h3 id="dockTitle">Docker — container per server</h3>
-    </div>
-    <div class="dockwrap" id="dockwrap"></div>
+</div>
+
+<!-- modale dashboard Docker per server (grande, centrale) -->
+<div class="ovl" id="dockOvl">
+  <div class="modal dockdash">
+    <div class="mhead"><b id="dockTitle">Docker</b><span class="dsub" id="dockSub"></span><span class="x" id="dockX">✕</span></div>
+    <div class="dockbody" id="dockBody"></div>
   </div>
 </div>
 
@@ -879,9 +920,26 @@ async function loadScans(){
     if(typeof HOSTS!=="undefined" && HOSTS.length) redraw();
   }catch(e){}
 }
+// semaforo RAG Docker: rosso se container fermi, giallo se in difficoltà, verde se ok
+function dockRag(d){
+  const conts = d && !d.error ? d.docker : null;
+  if(conts==null) return {cls:"grey", run:0, tot:0, bad:0, warn:0, tip:"docker non disponibile"};
+  const st=conts.map(contState);
+  const bad=st.filter(s=>s==="bad").length, warn=st.filter(s=>s==="warn").length;
+  const run=conts.filter(c=>c.state==="running").length, tot=conts.length;
+  const cls = bad?"red" : warn?"amber" : (tot?"green":"grey");
+  const tip = tot? `${run}/${tot} attivi${bad?` · ${bad} fermi`:""}${warn?` · ${warn} in difficoltà`:""} — apri dashboard Docker`
+                 : "nessun container";
+  return {cls, run, tot, bad, warn, tip};
+}
+function dockBtn(name, d){
+  const r=dockRag(d);
+  return `<span class="dockbtn ${r.cls}" data-dockdash="${escapeHtml(name)}" title="${r.tip}">
+    ${WHALE}<span class="ragdot"></span>Docker${r.tot?` <small>${r.run}/${r.tot}</small>`:""}</span>`;
+}
 function hostCard(name, d){
   if(!d || d.error){
-    return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}<h2><span class="dot bad"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
+    return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}<h2><span class="dot bad"></span>${name}${scanBtn(name)}${dockBtn(name,d)}${enhPill(name)}</h2>
       <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
   }
   const stale = (Math.floor(Date.now()/1000)-d.ts) > 90;
@@ -894,7 +952,7 @@ function hostCard(name, d){
       <div class="${barClass(dk.use_pct)}"><i style="width:${dk.use_pct}%"></i></div></div>`).join("")
     || '<div class="empty">—</div>';
   return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}
-    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${scanBtn(name)}${enhPill(name)}</h2>
+    <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}${scanBtn(name)}${dockBtn(name,d)}${enhPill(name)}</h2>
     <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
     <div class="grid2">
       <div class="metric"><div class="label">RAM</div>
@@ -953,66 +1011,149 @@ function sortConts(list){
   });
 }
 
-function dockerCard(name, d){
+// ------------------------------------------------------------ dashboard Docker (modale grande, stile Grafana)
+let dockHost = null;     // host della dashboard Docker aperta
+let DOCK_HIST = [];      // storico righe (ts,dock_cpu,dock_mem,cont_running,cont_total) dell'host aperto
+
+// sparkline compatta (mini grafico a linea) per le stat-tile
+function sparkSvg(pts, col){
+  const vals = pts.filter(p=>p[1]!=null);
+  if(vals.length<2) return "";
+  const W=120, H=26;
+  let vmax=0; vals.forEach(p=>{ if(p[1]>vmax) vmax=p[1]; }); vmax=vmax>0?vmax*1.1:1;
+  const t0=vals[0][0], t1=vals[vals.length-1][0], span=Math.max(1,t1-t0);
+  const X=t=>((t-t0)/span)*W, Y=v=>H-2-(v/vmax)*(H-4);
+  const line=vals.map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join(" ");
+  const area=`0,${H} `+line+` ${W},${H}`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <polyline points="${area}" fill="${col}" fill-opacity=".12" stroke="none"/>
+    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`;
+}
+function dtile(val, lbl, col, spark){
+  return `<div class="dtile"><div class="dtv"${col?` style="color:${col}"`:""}>${val}</div>
+    <div class="dtl">${lbl}</div>${spark||""}</div>`;
+}
+
+async function openDock(name){
+  dockHost=name;
+  document.getElementById("dockOvl").classList.add("on");
+  document.getElementById("dockTitle").innerHTML = `${WHALE}<span>Docker — ${escapeHtml(name)}</span>`;
+  document.getElementById("dockBody").innerHTML = `<div class="dload">Caricamento storico…</div>`;
+  await loadDockHist();
+  renderDockerDash();
+}
+function closeDock(){ dockHost=null; document.getElementById("dockOvl").classList.remove("on"); }
+async function loadDockHist(){
+  if(!dockHost){ DOCK_HIST=[]; return; }
+  try{ DOCK_HIST = await (await fetch("/api/history?host="+encodeURIComponent(dockHost)+"&minutes="+winMin,
+                                     {credentials:"same-origin"})).json(); }
+  catch(e){ DOCK_HIST=[]; }
+}
+
+function renderDockerDash(){
+  if(!dockHost) return;
+  const body=document.getElementById("dockBody");
+  const d=LATEST[dockHost];
   const conts = d && !d.error ? d.docker : null;
-  const coll = dockColl.has(name);
-  let body;
-  if(conts==null){ body = `<div class="empty">docker non disponibile</div>`; }
-  else if(!conts.length){ body = `<div class="empty">nessun container</div>`; }
-  else {
-    const arr = k => dockSort.key===k ? `<span class="ar"> ${dockSort.dir>0?'▲':'▼'}</span>` : "";
-    let rows="";
-    for(const c of sortConts(conts)){
-      const col = STATE_COL[contState(c)];
-      const sel = dockerSel[name]===c.name;
-      const cpu=c.cpu_pct, mem=c.mem_pct;
-      const cpuW = cpu==null?0:Math.min(100,cpu), memW = mem==null?0:Math.min(100,mem);
-      rows += `<tr class="crow${sel?' sel':''}" data-host="${escapeHtml(name)}" data-cont="${escapeHtml(c.name)}">
-        <td><span class="sdot" style="background:${col}" title="${escapeHtml(c.state)}"></span></td>
-        <td><span class="cnm">${escapeHtml(c.name)}<span class="cst" style="color:${col}">${escapeHtml(c.state)}${c.health?" · "+escapeHtml(c.health):""}</span></span></td>
-        <td><div class="cbar"><span class="mini"><i style="width:${cpuW}%;background:${pbarcol(cpu)}"></i></span><span class="pv">${cpu==null?"—":cpu.toFixed(0)+"%"}</span></div></td>
-        <td><div class="cbar"><span class="mini"><i style="width:${memW}%;background:${pbarcol(mem)}"></i></span><span class="pv">${mem==null?"—":mem.toFixed(0)+"%"}</span></div></td></tr>`;
-      if(sel){
-        rows += `<tr class="cxrow"><td colspan="4"><div class="cxbox">
-          <div class="kv"><span class="k">Memoria</span><span class="v">${escapeHtml(c.mem_usage||"—")}</span></div>
-          <div class="kv"><span class="k">Rete I/O</span><span class="v">${escapeHtml(c.net_io||"—")}</span></div>
-          <div class="kv"><span class="k">Blocco I/O</span><span class="v">${escapeHtml(c.blk_io||"—")}</span></div>
-          <div class="kv"><span class="k">PID</span><span class="v">${c.pids ?? "—"}</span></div>
-        </div></td></tr>`;
-      }
+  const sub=document.getElementById("dockSub");
+  if(conts==null){ body.innerHTML=`<div class="dload">docker non disponibile su questo server</div>`;
+    if(sub) sub.textContent=""; return; }
+
+  const runN=conts.filter(c=>c.state==="running").length;
+  const stopN=conts.filter(c=>contState(c)==="bad").length;
+  const warnN=conts.filter(c=>contState(c)==="warn").length;
+  const imgs=d.docker_images, cpus=d.cpus;
+  const cpuSum=conts.reduce((s,c)=>s+(c.cpu_pct||0),0);
+  const memSum=conts.reduce((s,c)=>s+(c.mem_pct||0),0);
+  // docker stats riporta il %CPU relativo a un core → normalizzo sul totale dei core
+  const cpuUtil = cpus ? cpuSum/cpus : cpuSum;
+  const pidTot=conts.reduce((s,c)=>s+(c.pids||0),0);
+  if(sub) sub.innerHTML = `${escapeHtml(d.host||"")} · ${ago(d.ts)} · finestra ${winLabel(winMin)}`;
+
+  // sparkline dallo storico
+  const spCpu=sparkSvg(DOCK_HIST.map(r=>[r.ts,r.dock_cpu]), "#58a6ff");
+  const spMem=sparkSvg(DOCK_HIST.map(r=>[r.ts,r.dock_mem]), "#3fb950");
+
+  // --- Overview: 9 stat-tile con numeroni (stile Grafana)
+  const overview = `<div class="dsec"><div class="dsec-h">Panoramica</div>
+    <div class="dtiles">
+      ${dtile(conts.length, "Container")}
+      ${dtile(runN, "Attivi", "var(--ok)")}
+      ${dtile(stopN, "Fermi", stopN?"var(--bad)":"#8b949e")}
+      ${dtile(warnN, "Problemi", warnN?"var(--warn)":"#8b949e")}
+      ${dtile(imgs!=null?imgs:"—", "Immagini")}
+      ${dtile(cpuUtil.toFixed(0)+"%", "CPU util.", pbarcol(cpuUtil), spCpu)}
+      ${dtile(memSum.toFixed(0)+"%", "MEM util.", pbarcol(memSum), spMem)}
+      ${dtile(pidTot, "PID totali")}
+      ${dtile(cpus!=null?cpus:"—", "Core CPU")}
+    </div></div>`;
+
+  // --- Serie temporali (3 pannelli) alimentate da /api/history
+  const charts = `<div class="dsec"><div class="dsec-h">Andamento (${winLabel(winMin)})</div>
+    <div class="dcharts">
+      <div class="dpanel"><div class="dpt">CPU util. aggregata</div>
+        <div class="chart" id="dChartCpu"></div><div class="tip" id="dTipCpu"></div></div>
+      <div class="dpanel"><div class="dpt">MEM util. aggregata</div>
+        <div class="chart" id="dChartMem"></div><div class="tip" id="dTipMem"></div></div>
+      <div class="dpanel"><div class="dpt">Container attivi / totali</div>
+        <div class="chart" id="dChartCont"></div><div class="tip" id="dTipCont"></div></div>
+    </div></div>`;
+
+  // --- Risorse per container: barre CPU e MEM ordinate
+  const byCpu=[...conts].sort((a,b)=>(b.cpu_pct||0)-(a.cpu_pct||0));
+  const byMem=[...conts].sort((a,b)=>(b.mem_pct||0)-(a.mem_pct||0));
+  const barRow=(c,v)=>`<div class="dbar"><span class="dbn" title="${escapeHtml(c.name)}">
+      <span class="sdot" style="background:${STATE_COL[contState(c)]}"></span>${escapeHtml(c.name)}</span>
+    <span class="dbt"><i style="width:${v==null?0:Math.min(100,v)}%;background:${pbarcol(v)}"></i></span>
+    <span class="dbv">${v==null?"—":v.toFixed(1)+"%"}</span></div>`;
+  const bars = `<div class="dsec"><div class="dsec-h">Risorse per container</div>
+    <div class="dbars2">
+      <div class="dpanel"><div class="dpt">CPU per container</div>${byCpu.map(c=>barRow(c,c.cpu_pct)).join("")||'<div class="empty">—</div>'}</div>
+      <div class="dpanel"><div class="dpt">Memoria per container</div>${byMem.map(c=>barRow(c,c.mem_pct)).join("")||'<div class="empty">—</div>'}</div>
+    </div></div>`;
+
+  // --- Tabella dettaglio container (righe espandibili)
+  const arr = k => dockSort.key===k ? `<span class="ar"> ${dockSort.dir>0?'▲':'▼'}</span>` : "";
+  let rows="";
+  if(!conts.length){ rows = `<tr><td colspan="4"><div class="empty">nessun container</div></td></tr>`; }
+  for(const c of sortConts(conts)){
+    const col = STATE_COL[contState(c)];
+    const sel = dockerSel[dockHost]===c.name;
+    const cpu=c.cpu_pct, mem=c.mem_pct;
+    const cpuW = cpu==null?0:Math.min(100,cpu), memW = mem==null?0:Math.min(100,mem);
+    rows += `<tr class="crow${sel?' sel':''}" data-host="${escapeHtml(dockHost)}" data-cont="${escapeHtml(c.name)}">
+      <td><span class="sdot" style="background:${col}" title="${escapeHtml(c.state)}"></span></td>
+      <td><span class="cnm">${escapeHtml(c.name)}<span class="cst" style="color:${col}">${escapeHtml(c.state)}${c.health?" · "+escapeHtml(c.health):""}</span></span></td>
+      <td><div class="cbar"><span class="mini"><i style="width:${cpuW}%;background:${pbarcol(cpu)}"></i></span><span class="pv">${cpu==null?"—":cpu.toFixed(0)+"%"}</span></div></td>
+      <td><div class="cbar"><span class="mini"><i style="width:${memW}%;background:${pbarcol(mem)}"></i></span><span class="pv">${mem==null?"—":mem.toFixed(0)+"%"}</span></div></td></tr>`;
+    if(sel){
+      rows += `<tr class="cxrow"><td colspan="4"><div class="cxbox">
+        <div class="kv"><span class="k">Memoria</span><span class="v">${escapeHtml(c.mem_usage||"—")}</span></div>
+        <div class="kv"><span class="k">Rete I/O</span><span class="v">${escapeHtml(c.net_io||"—")}</span></div>
+        <div class="kv"><span class="k">Blocco I/O</span><span class="v">${escapeHtml(c.blk_io||"—")}</span></div>
+        <div class="kv"><span class="k">PID</span><span class="v">${c.pids ?? "—"}</span></div>
+      </div></td></tr>`;
     }
-    body = `<table class="ctab"><thead><tr>
-        <th class="st" data-csort="sev" title="ordina per stato (problemi in cima)">St${arr('sev')}</th>
-        <th data-csort="name">Container${arr('name')}</th>
-        <th class="num" data-csort="cpu">CPU${arr('cpu')}</th>
-        <th class="num" data-csort="mem">MEM${arr('mem')}</th>
-      </tr></thead><tbody>${rows}</tbody></table>`;
   }
-  // overview stile Grafana: numeroni + gauge CPU/MEM aggregati
-  if(conts && conts.length){
-    const runN=conts.filter(c=>c.state==="running").length;
-    const cpuSum=conts.reduce((s,c)=>s+(c.cpu_pct||0),0);
-    const memSum=conts.reduce((s,c)=>s+(c.mem_pct||0),0);
-    const imgs=(d&&!d.error)?d.docker_images:null;
-    const cpus=(d&&!d.error)?d.cpus:null;
-    // docker stats riporta il %CPU relativo a un core → normalizzo sul totale dei core
-    const cpuUtil = cpus ? cpuSum/cpus : cpuSum;
-    const cpuLbl = cpus ? `CPU util. · ${cpus} core` : "CPU util.";
-    body = `<div class="dover">
-      <div class="stat"><div class="sv">${conts.length}</div><div class="sl">Container</div></div>
-      <div class="stat"><div class="sv" style="color:var(--ok)">${runN}</div><div class="sl">Attivi</div></div>
-      ${imgs!=null?`<div class="stat"><div class="sv">${imgs}</div><div class="sl">Immagini</div></div>`:""}
-      ${gaugeSvg(cpuUtil,cpuLbl)}
-      ${gaugeSvg(memSum,"MEM util.")}
-    </div>` + body;
-  }
-  const run = conts ? conts.filter(c=>c.state==="running").length : 0;
-  const tot = conts ? conts.length : 0;
-  const prob = conts ? conts.filter(c=>contState(c)!=="ok").length : 0;
-  const badge = conts==null ? "n/d" : `${run}/${tot} attivi${prob?" · "+prob+" ⚠":""}`;
-  return `<div class="dockcard${coll?' collapsed':''}">
-    <div class="dh" data-dockhead="${escapeHtml(name)}"><span class="chev">▾</span>${WHALE}<span class="nm">${name}</span><span class="ct">${badge}</span></div>
-    <div class="cbody${coll?' hide':''}">${body}</div></div>`;
+  const table = `<div class="dsec"><div class="dsec-h">Dettaglio container</div>
+    <table class="ctab"><thead><tr>
+      <th class="st" data-csort="sev" title="ordina per stato (problemi in cima)">St${arr('sev')}</th>
+      <th data-csort="name">Container${arr('name')}</th>
+      <th class="num" data-csort="cpu">CPU${arr('cpu')}</th>
+      <th class="num" data-csort="mem">MEM${arr('mem')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  body.innerHTML = overview + charts + bars + table;
+
+  // disegno i grafici temporali (dopo l'inserimento dell'HTML)
+  const cpuFmt=v=>v==null?"—":v.toFixed(0)+"%", contFmt=v=>v==null?"—":v.toFixed(0);
+  drawChart(document.getElementById("dChartCpu"), document.getElementById("dTipCpu"),
+            [{name:"CPU util.", color:"#58a6ff", pts:DOCK_HIST.map(r=>[r.ts, r.dock_cpu])}], cpuFmt);
+  drawChart(document.getElementById("dChartMem"), document.getElementById("dTipMem"),
+            [{name:"MEM util.", color:"#3fb950", pts:DOCK_HIST.map(r=>[r.ts, r.dock_mem])}], cpuFmt);
+  drawChart(document.getElementById("dChartCont"), document.getElementById("dTipCont"),
+            [{name:"attivi", color:"#3fb950", pts:DOCK_HIST.map(r=>[r.ts, r.cont_running])},
+             {name:"totali", color:"#8b949e", pts:DOCK_HIST.map(r=>[r.ts, r.cont_total])}], contFmt);
 }
 
 // ------------------------------------------------------------ render toggles/presets
@@ -1064,8 +1205,8 @@ function redraw(){
   renderLegend("secLeg", secField, secFmt);
   // flussi di rete (Sankey)
   renderFlow();
-  // docker
-  document.getElementById("dockwrap").innerHTML = HOSTS.map(h=>dockerCard(h, LATEST[h])).join("");
+  // dashboard Docker aperta? aggiorna
+  if(dockHost && document.getElementById("dockOvl").classList.contains("on")) renderDockerDash();
 }
 
 function gotoLogin(){ location.href="/login"; }
@@ -1089,7 +1230,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd]");
+  const t=e.target.closest("[data-net],[data-sec],[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd]");
   if(!t) return;
   if(t.dataset.net){ netMetric=t.dataset.net; renderToggles(); redraw(); }
   else if(t.dataset.sec){ secMetric=t.dataset.sec; renderToggles(); redraw(); }
@@ -1099,11 +1240,11 @@ document.addEventListener("click", e=>{
   else if(t.dataset.csort){ const k=t.dataset.csort;
                             if(dockSort.key===k){ dockSort.dir*=-1; }
                             else { dockSort.key=k; dockSort.dir = (k==="cpu"||k==="mem") ? -1 : 1; }
-                            redraw(); }
+                            dockHost ? renderDockerDash() : redraw(); }
   else if(t.dataset.cont){ const h=t.dataset.host;
-                           dockerSel[h] = dockerSel[h]===t.dataset.cont ? null : t.dataset.cont; redraw(); }
-  else if(t.dataset.dockhead){ const h=t.dataset.dockhead;
-                               dockColl.has(h)?dockColl.delete(h):dockColl.add(h); redraw(); }
+                           dockerSel[h] = dockerSel[h]===t.dataset.cont ? null : t.dataset.cont;
+                           dockHost ? renderDockerDash() : redraw(); }
+  else if(t.dataset.dockdash){ openDock(t.dataset.dockdash); }
   else if(t.dataset.add){ openConfig(); }
   else if(t.dataset.del){ removeHost(t.dataset.del); }
   else if(t.dataset.uappr){ userAction(t.dataset.uappr, "approve"); }
@@ -1348,7 +1489,9 @@ document.getElementById("usrOvl").onclick=closeUsers;
 document.getElementById("nuCreate").onclick=createUser;
 document.getElementById("scanX").onclick=closeScan;
 document.getElementById("scanOvl").onclick=closeScan;
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeCopy(); closeUsers(); closeConfig(); closeScan(); } });
+document.getElementById("dockX").onclick=closeDock;
+document.getElementById("dockOvl").onclick=(e)=>{ if(e.target.id==="dockOvl") closeDock(); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeCopy(); closeUsers(); closeConfig(); closeScan(); closeDock(); } });
 
 // ------------------------------------------------------------ scansione nmap (drawer)
 let scanHost=null, scanTimer=null, scanData=null;
@@ -1690,9 +1833,6 @@ winEl.addEventListener("change", ()=>refresh());
 window.addEventListener("resize", ()=>{ if(HOSTS.length) redraw(); });
 
 // avvio
-const dt=document.getElementById("dockTitle");
-dt.style.display="flex"; dt.style.alignItems="center"; dt.style.gap="9px";
-dt.innerHTML = WHALE + "<span>Docker — container per server</span>";
 winMin = sliderToMin(+winEl.value);
 document.getElementById("winval").textContent = winLabel(winMin);
 renderToggles();

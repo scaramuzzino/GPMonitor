@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ---------------------------------------------------------------- versione
-VERSION = "v2.8"
+VERSION = "v2.9"
 BUILD_DATE = "2026-08-23"
 AUTHOR = "Stefano Scaramuzzino"
 
@@ -352,6 +352,11 @@ def init_db():
             )
         """)
         c.execute("CREATE INDEX IF NOT EXISTS idx_metrics_host_ts ON metrics(host, ts)")
+        # migrazione: colonne docker aggregate (util CPU% e MEM%) per lo storico del pannello Docker
+        have = {r["name"] for r in c.execute("PRAGMA table_info(metrics)")}
+        for col in ("dock_cpu", "dock_mem"):
+            if col not in have:
+                c.execute("ALTER TABLE metrics ADD COLUMN %s REAL" % col)
         # persistenza consolidata in SQLite (prima erano hosts.json / users.json)
         c.execute("""
             CREATE TABLE IF NOT EXISTS hosts (
@@ -437,18 +442,26 @@ def persist(name, data):
     conts = data.get("docker")
     running = sum(1 for c in (conts or []) if c.get("state") == "running")
     total = len(conts) if conts is not None else None
+    # aggregati docker per lo storico: util CPU% (normalizzata sui core) e util MEM%
+    dock_cpu = dock_mem = None
+    if conts:
+        cpu_sum = sum((c.get("cpu_pct") or 0) for c in conts)
+        cpus = data.get("cpus")
+        dock_cpu = (cpu_sum / cpus) if cpus else cpu_sum
+        dock_mem = sum((c.get("mem_pct") or 0) for c in conts)
     r = data["rates"]
     with db() as c:
         c.execute(
             "INSERT INTO metrics (host,ts,mem_used,mem_total,disk_pct,net_rx_rate,"
-            "net_tx_rate,fw_drop_rate,estab,ssh_failed_1h,f2b_banned,cont_running,cont_total) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "net_tx_rate,fw_drop_rate,estab,ssh_failed_1h,f2b_banned,cont_running,cont_total,"
+            "dock_cpu,dock_mem) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (name, data["ts"], data["ram"]["used"], data["ram"]["total"],
              (root["use_pct"] if root else None),
              r["net_rx_rate"], r["net_tx_rate"], r["fw_drop_rate"],
              (data.get("conns") or {}).get("estab"),
              sec.get("ssh_failed_1h"), sec.get("f2b_banned"),
-             running, total),
+             running, total, dock_cpu, dock_mem),
         )
         cutoff = int(time.time()) - RETENTION_H * 3600
         c.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
@@ -941,7 +954,8 @@ class Handler(BaseHTTPRequestHandler):
             mins = min(mins, RETENTION_H * 60)
             since = int(time.time()) - mins * 60
             cols = ("ts,mem_used,mem_total,disk_pct,net_rx_rate,net_tx_rate,"
-                    "fw_drop_rate,estab,ssh_failed_1h,cont_running,cont_total")
+                    "fw_drop_rate,estab,ssh_failed_1h,cont_running,cont_total,"
+                    "dock_cpu,dock_mem")
 
             def fetch(h):
                 with db() as c:
