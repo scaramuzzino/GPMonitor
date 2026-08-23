@@ -1647,17 +1647,15 @@ function renderDrawerEvents(events){
 }
 async function refreshSec(){
   try{
-    const ov=await (await fetch("/api/security/overview")).then(r=>r.json());
+    const ov=await (await fetch("/api/security/overview")).json();
     SEC_OVERVIEW=ov;
-    // history per ogni host (per le sparkline nella tabella)
-    const hist=await (await fetch(`/api/security/history?minutes=${secWinMin}`)).then(r=>r.json());
-    // /api/security/history senza host non esiste: fetch per-host in parallelo
+    // history per-host in parallelo (per le sparkline nella tabella)
     const promises=(ov.hosts||[]).map(h=>fetch(`/api/security/history?host=${encodeURIComponent(h.host)}&minutes=${secWinMin}`).then(r=>r.json()));
     const results=await Promise.all(promises);
     SEC_HIST={}; (ov.hosts||[]).forEach((h,i)=>{ SEC_HIST[h.host]=(results[i]||{}).points||[]; });
     renderSecKpis(); renderSaiRows();
     // events feed
-    const evs=await (await fetch(`/api/security/events?minutes=${secEvWinMin}&limit=200${secEvFilter!=="all"?`&type=${secEvFilter}`:""}`)).then(r=>r.json());
+    const evs=await (await fetch(`/api/security/events?minutes=${secEvWinMin}&limit=200${secEvFilter!=="all"?`&type=${secEvFilter}`:""}`)).json();
     SEC_EVENTS=evs.events||[];
     renderSecEvents();
     // drawer aperto? aggiorna
