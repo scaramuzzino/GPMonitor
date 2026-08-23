@@ -56,6 +56,9 @@
   .label{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
   .val{font-size:16px;font-weight:600}
   .val small{font-size:11px;color:var(--mut);font-weight:400}
+  .val.rx{color:#39d0d8} .val.tx{color:#a371f7}
+  .trend{font-size:12px;margin-left:5px;font-weight:700;vertical-align:baseline}
+  .trend.up{color:var(--bad)} .trend.down{color:var(--ok)} .trend.flat{color:var(--warn)} .trend.idle{color:var(--mut)}
   .bar{height:6px;border-radius:3px;background:#21262d;overflow:hidden;margin-top:4px}
   .bar>i{display:block;height:100%;background:var(--ok)}
   .bar.warn>i{background:var(--warn)} .bar.bad>i{background:var(--bad)}
@@ -1121,6 +1124,28 @@ function dockBtn(name, d){
   return `<span class="dockbtn ${r.cls}" data-dockdash="${escapeHtml(name)}" title="${r.tip}">
     ${WHALE}<span class="ragdot"></span><small>${r.tot?`${r.run}/${r.tot}`:"—"}</small></span>`;
 }
+// trend RX/TX: fulmine colorato per campione (verde=in calo, rosso=in aumento,
+// giallo=stabile, grigio=traffico minimo). Confronta col campione PRECEDENTE
+// (chiave = d.ts) per non falsare il trend sui redraw ripetuti a parità di dato.
+let PREV_RATES = {};   // { "host|rx": {ts, val, prev} }
+function trendGlyph(name, key, cur, ts){
+  if(cur==null) return "";
+  const k = name+"|"+key;
+  let st = PREV_RATES[k];
+  if(!st){ st = PREV_RATES[k] = {ts, val:cur, prev:null}; }
+  else if(st.ts !== ts){ st.prev = st.val; st.val = cur; st.ts = ts; }
+  const prev = st.prev;
+  const IDLE = 4096; // < ~4 KB/s = praticamente fermo
+  if(cur < IDLE && (prev==null || prev < IDLE))
+    return `<span class="trend idle" title="traffico minimo">⚡</span>`;
+  if(prev==null)
+    return `<span class="trend flat" title="in rilevamento">⚡</span>`;
+  const ratio = cur / Math.max(prev, 1);
+  let cls="flat", tip="stabile";
+  if(ratio >= 1.25){ cls="up";   tip="in aumento"; }
+  else if(ratio <= 0.8){ cls="down"; tip="in calo"; }
+  return `<span class="trend ${cls}" title="${tip} (rispetto al campione precedente)">⚡</span>`;
+}
 function hostCard(name, d){
   if(!d || d.error){
     return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}
@@ -1153,9 +1178,9 @@ function hostCard(name, d){
     </div>
     <div class="grid2" style="margin-top:8px">
       <div class="metric"><div class="label">Rete ↓ RX</div>
-        <div class="val">${hrate(r.net_rx_rate)}</div></div>
+        <div class="val rx">${hrate(r.net_rx_rate)}${trendGlyph(name,'rx',r.net_rx_rate,d.ts)}</div></div>
       <div class="metric"><div class="label">Rete ↑ TX</div>
-        <div class="val">${hrate(r.net_tx_rate)}</div></div>
+        <div class="val tx">${hrate(r.net_tx_rate)}${trendGlyph(name,'tx',r.net_tx_rate,d.ts)}</div></div>
     </div>
     <section><h3>Disco</h3>${diskRows}</section>
   </div>`;
