@@ -117,6 +117,8 @@ Componenti (cartella `collector/`):
 | `monitor-probe-macos.py` | Sonda **macOS** (stesso schema JSON): `sysctl`/`vm_stat`, `df`, `netstat`. |
 | `tests/test_security.py` | Test unittest stdlib del SAI engine (52 test). |
 | `tools/db-backup.py` | Backup online SQLite con rotazione (percorsi/ritenzione via env). |
+| `tools/email-report.py` | Report giornaliero via email (HTML), config SMTP/DB via env. |
+| `tools/watchdog.py` | Watchdog di allarme via email su problemi gravi (soglie via env). |
 | `Dockerfile`, `docker-compose.yml` | Build ed esecuzione del container. |
 
 Storage SQLite (`data/metrics.db`):
@@ -478,13 +480,40 @@ automaticamente vulnerabili):
 
 ## Report & Avvisi (email)
 
-- **Report giornaliero** HTML (tabelle ordinate, badge RAG, grafici a barre CSS — Gmail-safe:
-  niente SVG/JS/immagini esterne): salute, Docker, vulnerabilità/CVE per host, **analisi attacchi**
-  (minaccia reale vs rumore bloccato), utenze. Cadenze via cron.
-- **Watchdog**: controlla periodicamente i dati; su **problema grave** (disco/RAM critici, host
-  irraggiungibile, SSH che raggiungono sshd) invia un **warning + il report**. Anti-spam con cooldown.
-- **Destinatario**: impostabile da **Config → Email destinatario** (`kv['report_email']`).
+- **Report giornaliero** (`tools/email-report.py`) HTML (tabelle ordinate, badge RAG, grafici a barre
+  CSS — Gmail-safe: niente SVG/JS/immagini esterne): salute, Docker, vulnerabilità/CVE per host,
+  **analisi attacchi** (minaccia reale vs rumore bloccato), utenze. Cadenze via cron.
+- **Watchdog** (`tools/watchdog.py`): controlla periodicamente i dati; su **problema grave**
+  (disco/RAM critici, host irraggiungibile, SSH che raggiungono sshd) invia un **warning + il report**.
+  Anti-spam con cooldown; soglie configurabili via env. `--test` invia un avviso di esempio.
+- **Destinatario**: preferito quello impostato da **Config → Email destinatario** (`kv['report_email']`);
+  in mancanza usa `GPMON_REPORT_EMAIL`.
 - **Nessuna password** viene mai inviata via email (per scelta di sicurezza).
+
+Entrambi gli script sono **standalone** e si configurano via env (SMTP, DB, soglie). Esempio di cron:
+
+```bash
+# variabili condivise (in /etc/environment, in un file sorgente dal cron, o inline)
+#   GPMON_DB=/opt/gpmonitor/collector/data/metrics.db
+#   GPMON_SMTP_HOST=mail.example.com  GPMON_SMTP_PORT=465  GPMON_SMTP_FROM=monitor@example.com
+#   GPMON_SMTP_PASSWORD_FILE=/root/.gpmon/mail_pw   GPMON_REPORT_EMAIL=admin@example.com
+#   (SMTP con STARTTLS: GPMON_SMTP_SSL=0 GPMON_SMTP_PORT=587 · cert self-signed: GPMON_SMTP_INSECURE=1)
+
+# report giornaliero alle 08:00
+0 8 * * *    /usr/bin/python3 /opt/gpmonitor/collector/tools/email-report.py >> /var/log/gpmon-report.log 2>&1
+# watchdog ogni 10 minuti
+*/10 * * * * /usr/bin/python3 /opt/gpmonitor/collector/tools/watchdog.py    >> /var/log/gpmon-watchdog.log 2>&1
+```
+
+| Variabile | Significato |
+|---|---|
+| `GPMON_SMTP_HOST` / `GPMON_SMTP_PORT` | Server SMTP e porta (default `localhost:465`). |
+| `GPMON_SMTP_SSL` | `1` = SMTP_SSL (default), `0` = SMTP + STARTTLS. |
+| `GPMON_SMTP_FROM` / `GPMON_SMTP_USER` | Mittente e utente di login (default USER=FROM). |
+| `GPMON_SMTP_PASSWORD` / `GPMON_SMTP_PASSWORD_FILE` | Password SMTP (valore o file). |
+| `GPMON_SMTP_INSECURE` | `1` = non verificare il certificato TLS (mailserver self-signed). |
+| `GPMON_REPORT_EMAIL` | Destinatario di fallback (se non impostato in dashboard). |
+| `GPMON_WD_DISK_CRIT` / `GPMON_WD_MEM_CRIT` / `GPMON_WD_STALE` / `GPMON_WD_SSH_REAL` / `GPMON_WD_COOLDOWN` | Soglie e cooldown del watchdog. |
 
 ## Auto-ban scanner
 
