@@ -22,6 +22,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import deque
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 # Security Activity Index engine (funzioni pure, testabili senza DB/SSH)
@@ -371,13 +372,33 @@ def _shq(s):
     return "'" + str(s).replace("'", "'\\''") + "'"
 
 
-def db():
+def _connect():
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=10000")  # attende invece di fallire con 'database is locked'
     conn.execute("PRAGMA journal_mode=WAL")    # reader concorrenti + 1 writer: niente lock reciproco
     conn.execute("PRAGMA synchronous=NORMAL")  # sicuro con WAL, molti meno fsync
     return conn
+
+
+@contextmanager
+def db():
+    """Context manager: commit on success, rollback on error, e SEMPRE close().
+
+    Nota: `with sqlite3.connect(...)` da solo NON chiude la connessione (fa solo
+    commit/rollback della transazione) -> senza questo wrapper ogni chiamata
+    lasciava una connessione aperta (leak di FD, WAL che non fa checkpoint,
+    tempesta di 'database is locked'). Qui il finally garantisce la chiusura.
+    """
+    conn = _connect()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
