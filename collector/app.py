@@ -381,24 +381,49 @@ def _connect():
     return conn
 
 
+# Serializza TUTTI gli accessi al DB in-process e rende sicuri i `with db()` ANNIDATI.
+# Il collector sonda i 3 host in thread paralleli + il thread nmap + gli handler HTTP
+# (ThreadingHTTPServer): piu' writer concorrenti su SQLite -> 'database is locked'
+# nonostante WAL/busy_timeout. Peggio: alcuni `with db()` erano annidati (es.
+# _detect_port_changes -> _emit_event), cioe' una seconda connessione provava a
+# scrivere mentre la prima (stesso thread) teneva gia' il write-lock -> auto-lock.
+# Soluzione:
+#   - _db_lock RLock: una sola transazione attiva per volta fra i thread (rientrante,
+#     quindi l'annidamento nello stesso thread non fa deadlock);
+#   - connessione per-thread con contatore di profondita': i `with db()` annidati
+#     RIUSANO la stessa connessione (una sola transazione), commit/close solo all'uscita
+#     del blocco piu' esterno. Niente piu' auto-lock ne' leak.
+_db_lock = threading.RLock()
+_db_tls = threading.local()
+
+
 @contextmanager
 def db():
-    """Context manager: commit on success, rollback on error, e SEMPRE close().
-
-    Nota: `with sqlite3.connect(...)` da solo NON chiude la connessione (fa solo
-    commit/rollback della transazione) -> senza questo wrapper ogni chiamata
-    lasciava una connessione aperta (leak di FD, WAL che non fa checkpoint,
-    tempesta di 'database is locked'). Qui il finally garantisce la chiusura.
-    """
-    conn = _connect()
+    """Accesso serializzato al DB, sicuro per chiamate annidate. Commit/rollback e
+    close() avvengono solo all'uscita del `with db()` piu' esterno del thread."""
+    _db_lock.acquire()
     try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+        top = getattr(_db_tls, "conn", None) is None
+        if top:
+            _db_tls.conn = _connect()
+            _db_tls.depth = 0
+        _db_tls.depth += 1
+        conn = _db_tls.conn
+        try:
+            yield conn
+            if _db_tls.depth == 1:
+                conn.commit()
+        except Exception:
+            if _db_tls.depth == 1:
+                conn.rollback()
+            raise
+        finally:
+            _db_tls.depth -= 1
+            if _db_tls.depth == 0:
+                conn.close()
+                _db_tls.conn = None
     finally:
-        conn.close()
+        _db_lock.release()
 
 
 def init_db():
