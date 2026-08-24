@@ -535,6 +535,13 @@
   .badge.elevated{background:rgba(210,153,34,.18);color:var(--warn);border:1px solid rgba(210,153,34,.3)}
   .badge.active_attack{background:rgba(248,81,73,.18);color:var(--bad);border:1px solid rgba(248,81,73,.3)}
   .badge.unknown{background:rgba(110,118,129,.14);color:var(--mut);border:1px solid var(--line)}
+  /* pill SAI sulla card server */
+  .saipill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:20px;
+    font-size:10px;font-weight:800;letter-spacing:.03em;vertical-align:middle;white-space:nowrap;cursor:pointer}
+  .saipill.normal{background:rgba(63,185,80,.16);color:var(--ok);border:1px solid rgba(63,185,80,.3)}
+  .saipill.elevated{background:rgba(210,153,34,.18);color:var(--warn);border:1px solid rgba(210,153,34,.3)}
+  .saipill.active_attack{background:rgba(248,81,73,.20);color:var(--bad);border:1px solid rgba(248,81,73,.35)}
+  .saipill.unknown{background:rgba(110,118,129,.14);color:var(--mut);border:1px solid var(--line)}
   /* Security Changes feed */
   .secfeed{margin-top:14px}
   .secfeed .ffilters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
@@ -1353,7 +1360,7 @@ function hostCard(name, d){
   if(!d || d.error){
     return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}
       <h2><span class="dot bad"></span>${name}</h2>
-      <div class="host-sub">${d&&d.host?escapeHtml(d.host):"—"}</div>
+      <div class="host-sub">${d&&d.host?escapeHtml(d.host):"—"} ${saiPill(name)}</div>
       <div class="card-actions">${scanBtn(name)}${dockBtn(name,d)}${enhPill(name)}</div>
       <div class="err">⚠ ${d?escapeHtml(d.error||"errore"):"nessun dato"}</div></div>`;
   }
@@ -1369,7 +1376,7 @@ function hostCard(name, d){
     || '<div class="empty">—</div>';
   return `<div class="card${isEnabled(name)?'':' off'}">${secKpi(name)}
     <h2><span class="dot ${stale?'stale':'ok'}"></span>${name}</h2>
-    <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''}</div>
+    <div class="host-sub">${escapeHtml(d.host||"")} · ${ago(d.ts)}${stale?' · dati vecchi':''} ${saiPill(name)}</div>
     <div class="card-actions">${scanBtn(name)}${dockBtn(name,d)}${enhPill(name)}</div>
     <div class="grid2">
       <div class="metric"><div class="label">RAM</div>
@@ -1699,6 +1706,14 @@ function stateBadge(state){
   const lbl={normal:"NORMAL",elevated:"ELEVATED","active_attack":"ACTIVE ATTACK",unknown:"UNKNOWN"};
   return `<span class="badge ${state}">${lbl[state]||state}</span>`;
 }
+function saiPill(name){
+  const o=(SEC_OVERVIEW.hosts||[]).find(h=>h.host===name);
+  const st=(o&&o.state)||"unknown";
+  const val=(o&&o.sai!=null)?o.sai:"—";
+  const lbl={normal:"normale",elevated:"elevato",active_attack:"ATTACCO ATTIVO",unknown:"non disponibile"}[st]||st;
+  return `<span class="saipill ${st}" data-saihost="${escapeHtml(name)}"`
+    +` title="Security Activity Index: ${val}/100 — stato ${lbl} (clic per il drill-down)">SAI ${val}</span>`;
+}
 function renderSecKpis(){
   const t=SEC_OVERVIEW.totals||{};
   const tiles=[
@@ -1941,7 +1956,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-secfilter],[data-secwin],[data-secx],[data-kpi]");
+  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-saihost],[data-secfilter],[data-secwin],[data-secx],[data-kpi]");
   if(!t) return;
   if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
                           document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); refresh(); }
@@ -1983,6 +1998,7 @@ document.addEventListener("click", e=>{
       copyClip(txt).then(ok=>{ if(!ok) openCopy("Comandi — "+(it.service||""), txt);
         else { t.textContent="✓ copiati"; setTimeout(()=>{ t.textContent="📋 copia comandi"; }, 1500); } }); } }
   else if(t.dataset.sechost){ openSecDrawer(t.dataset.sechost); }
+  else if(t.dataset.saihost){ openSecDrawer(t.dataset.saihost); }
   else if(t.dataset.kpi!==undefined){ secEvFilter=t.dataset.kpi; renderSecFilters(); refreshSec();
     const f=document.querySelector(".secfeed"); if(f) f.scrollIntoView({behavior:"smooth",block:"nearest"}); }
   else if(t.dataset.secfilter){ secEvFilter=t.dataset.secfilter; renderSecFilters(); refreshSec(); }

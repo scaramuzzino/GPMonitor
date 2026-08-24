@@ -348,6 +348,8 @@ La config sta in `collector/.env` (copia da `.env.example`); la compose la legge
 | `MON_NMAP` | Abilita la scansione nmap (porte/servizi/OS). |
 | `MON_NMAP_DEEP` | `1` = tutte le 65535 porte (`-p-`); `0` = top-1000. |
 | `MON_NMAP_VULN` | `1` = correlazione CVE via NSE `vulners`. ⚠ interroga internet: NON più 100% on-premise (toggle anche in Config, persistito in `kv`). |
+| `MON_NMAP_INTERVAL_HOURS` | Ogni quante ore rifare in automatico la scansione di ciascun host (default 6). Modificabile **a caldo** da Config (persistito in `kv`), range 1–168. |
+| `MON_NMAP_ERROR_RETRY_S` | Dopo quanti secondi ritentare uno scan **fallito**, senza aspettare l'intervallo pieno (default 900). Modificabile da Config. |
 | `MON_REPORT_EMAIL` | Destinatario di report/avvisi (modificabile anche da Config). |
 | `MON_SSH_KEY`, `MON_DATA_DIR` | Percorsi chiave privata e dati nel container. |
 
@@ -604,7 +606,7 @@ GPMON_DB=data/metrics.db python3 tools/db-backup.py
 | `/api/scans` / `/api/scan` | GET/POST | Riepiloghi CVE / avvio scansione (admin). |
 | `/api/security/*` | GET | Security Activity Dashboard (overview, history, events, peers, ports). |
 | `/api/hosts` | GET/POST/DELETE | Gestione host (admin). |
-| `/api/settings` | GET/POST | Impostazioni (`nmap_vuln`, `report_email`) (admin). |
+| `/api/settings` | GET/POST | Impostazioni (`nmap_vuln`, `report_email`, `nmap_interval_hours`, `nmap_error_retry_s`) (admin). |
 | `/api/register` `/api/login` `/api/logout` `/api/users*` | POST/GET | Auth e gestione utenti. |
 
 ---
