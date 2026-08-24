@@ -224,11 +224,14 @@ def set_setting(k, v):
 
 
 def load_settings():
-    """Impostazioni runtime persistite in kv. Al primo avvio semina da env."""
-    global NMAP_VULN, REPORT_EMAIL
+    """Impostazioni runtime persistite in kv. Al primo avvio semina da env; poi
+    sono modificabili a caldo da /api/settings (nessun restart)."""
+    global NMAP_VULN, REPORT_EMAIL, NMAP_INTERVAL_H, NMAP_ERROR_RETRY_S
     with db() as c:
         row = c.execute("SELECT v FROM kv WHERE k='nmap_vuln'").fetchone()
         rowe = c.execute("SELECT v FROM kv WHERE k='report_email'").fetchone()
+        rowi = c.execute("SELECT v FROM kv WHERE k='nmap_interval_hours'").fetchone()
+        rowr = c.execute("SELECT v FROM kv WHERE k='nmap_error_retry_s'").fetchone()
     if row is None:
         set_setting("nmap_vuln", "1" if NMAP_VULN else "0")  # semina dal default env
     else:
@@ -237,6 +240,20 @@ def load_settings():
         set_setting("report_email", REPORT_EMAIL)             # semina dal default env
     elif rowe["v"]:
         REPORT_EMAIL = rowe["v"]
+    if rowi is None:
+        set_setting("nmap_interval_hours", str(NMAP_INTERVAL_H))
+    else:
+        try:
+            NMAP_INTERVAL_H = max(1, min(168, int(rowi["v"])))  # 1h..7gg
+        except (TypeError, ValueError):
+            pass
+    if rowr is None:
+        set_setting("nmap_error_retry_s", str(NMAP_ERROR_RETRY_S))
+    else:
+        try:
+            NMAP_ERROR_RETRY_S = max(60, min(86400, int(rowr["v"])))  # 1min..1gg
+        except (TypeError, ValueError):
+            pass
 
 
 def hash_pw(pw, salt_hex):
@@ -1671,7 +1688,9 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/settings":
             self._json(200, {"nmap_enabled": NMAP_ENABLED, "nmap_vuln": NMAP_VULN,
                              "nmap_deep": NMAP_DEEP, "nmap_top_ports": NMAP_TOP_PORTS,
-                             "nmap_interval_hours": NMAP_INTERVAL_H, "report_email": REPORT_EMAIL})
+                             "nmap_interval_hours": NMAP_INTERVAL_H,
+                             "nmap_error_retry_s": NMAP_ERROR_RETRY_S,
+                             "report_email": REPORT_EMAIL})
         elif u.path == "/api/scans":
             # riepiloghi per il KPI di sicurezza RAG delle card (tutti gli host)
             now = int(time.time())
@@ -1893,7 +1912,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True, "hosts": self._hosts_list()})
 
         if u.path == "/api/settings":
-            global NMAP_VULN, REPORT_EMAIL
+            global NMAP_VULN, REPORT_EMAIL, NMAP_INTERVAL_H, NMAP_ERROR_RETRY_S
             if user["role"] != "admin":
                 return self._json(403, {"error": "richiede admin"})
             b = self._read_json()
@@ -1906,7 +1925,28 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "email non valida"})
                 REPORT_EMAIL = em
                 set_setting("report_email", em)
-            return self._json(200, {"ok": True, "nmap_vuln": NMAP_VULN, "report_email": REPORT_EMAIL})
+            if "nmap_interval_hours" in b:
+                try:
+                    iv = int(b.get("nmap_interval_hours"))
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": "intervallo non valido"})
+                if not (1 <= iv <= 168):
+                    return self._json(400, {"error": "intervallo fuori range (1..168 ore)"})
+                NMAP_INTERVAL_H = iv
+                set_setting("nmap_interval_hours", str(iv))
+            if "nmap_error_retry_s" in b:
+                try:
+                    rv = int(b.get("nmap_error_retry_s"))
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": "retry non valido"})
+                if not (60 <= rv <= 86400):
+                    return self._json(400, {"error": "retry fuori range (60..86400 s)"})
+                NMAP_ERROR_RETRY_S = rv
+                set_setting("nmap_error_retry_s", str(rv))
+            return self._json(200, {"ok": True, "nmap_vuln": NMAP_VULN,
+                                    "report_email": REPORT_EMAIL,
+                                    "nmap_interval_hours": NMAP_INTERVAL_H,
+                                    "nmap_error_retry_s": NMAP_ERROR_RETRY_S})
 
         if u.path == "/api/scan":
             if user["role"] != "admin":

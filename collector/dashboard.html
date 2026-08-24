@@ -2034,11 +2034,20 @@ async function loadSettings(){
             ${s.nmap_deep?"Scansione a profondità piena (tutte le porte).":""}</small></div>
           <label class="sw" id="swVulnW"><input type="checkbox" id="swVuln" ${s.nmap_vuln?"checked":""}>
             <span class="track"></span><span class="knob"></span></label>
+        </div>
+        <div class="setrow">
+          <div class="txt"><b>Cadenza scansione</b>
+            <small>Ogni quante ore rifare automaticamente la scansione di ciascun host (1–168).
+            Uno scan fallito non aspetta l'intervallo pieno: riprova dopo ${s.nmap_error_retry_s||900}s.</small></div>
+          <div class="emlrow"><input id="nmapIv" type="number" min="1" max="168" step="1"
+            value="${s.nmap_interval_hours||6}" style="width:72px"> <span class="cfgunit">ore</span>
+            <button id="nmapIvSave">Salva</button></div>
         </div></div>`;
     }
     el.innerHTML=html;
     const rb=document.getElementById("repEmailSave"); if(rb) rb.addEventListener("click", saveReportEmail);
     const sv=document.getElementById("swVuln"); if(sv) sv.addEventListener("change", toggleVuln);
+    const ib=document.getElementById("nmapIvSave"); if(ib) ib.addEventListener("click", saveNmapInterval);
   }catch(e){ el.innerHTML=""; }
 }
 async function saveReportEmail(){
@@ -2049,6 +2058,18 @@ async function saveReportEmail(){
       body:JSON.stringify({report_email:v})});
     const j=await r.json();
     if(r.ok){ m.textContent="✓ Email salvata: "+j.report_email; m.className="msg ok"; }
+    else{ m.textContent="⚠ "+(j.error||"errore"); m.className="msg err"; }
+  }catch(e){ m.textContent="⚠ errore di rete"; m.className="msg err"; }
+}
+async function saveNmapInterval(){
+  const iv=parseInt(document.getElementById("nmapIv").value,10);
+  const m=document.getElementById("cfgMsg");
+  if(!(iv>=1&&iv<=168)){ m.textContent="⚠ intervallo fuori range (1–168 ore)"; m.className="msg err"; return; }
+  try{
+    const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({nmap_interval_hours:iv})});
+    const j=await r.json();
+    if(r.ok){ m.textContent="✓ Cadenza salvata: ogni "+j.nmap_interval_hours+" ore"; m.className="msg ok"; }
     else{ m.textContent="⚠ "+(j.error||"errore"); m.className="msg err"; }
   }catch(e){ m.textContent="⚠ errore di rete"; m.className="msg err"; }
 }
