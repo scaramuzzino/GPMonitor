@@ -62,6 +62,7 @@ DATA_DIR = os.environ.get("MON_DATA_DIR", "/app/data")
 # --- scansione nmap (agentless, on-premise) ---
 NMAP_ENABLED = os.environ.get("MON_NMAP", "1") not in ("0", "false", "no", "")
 NMAP_INTERVAL_H = int(os.environ.get("MON_NMAP_INTERVAL_HOURS", "6"))   # rescan automatico ogni N ore
+NMAP_ERROR_RETRY_S = int(os.environ.get("MON_NMAP_ERROR_RETRY_S", "900"))  # uno scan FALLITO riprova dopo N s (non aspetta l'intervallo pieno)
 NMAP_TOP_PORTS = int(os.environ.get("MON_NMAP_TOP_PORTS", "1000"))      # profondità standard
 NMAP_DEEP = os.environ.get("MON_NMAP_DEEP", "0") not in ("0", "false", "no", "")  # tutte le 65535 porte
 # NB: vulners interroga vulners.com via internet (CPE->CVE) -> NON è più on-premise
@@ -1334,7 +1335,16 @@ def scan_loop():
     while True:
         for name, target in list(HOSTS):
             cur = get_scan(name)
-            stale = (cur is None) or (int(time.time()) - cur["ts"] > NMAP_INTERVAL_H * 3600)
+            now = int(time.time())
+            if cur is None:
+                stale = True
+            elif cur["status"] != "ok":
+                # uno scan FALLITO non deve bloccare i retry per l'intero intervallo:
+                # riprova dopo NMAP_ERROR_RETRY_S (altrimenti un errore transitorio
+                # resta "fresco" e lo scheduler lo salta fino a NMAP_INTERVAL_H ore dopo).
+                stale = (now - cur["ts"] > NMAP_ERROR_RETRY_S)
+            else:
+                stale = (now - cur["ts"] > NMAP_INTERVAL_H * 3600)
             with _scan_lock:
                 busy = name in _scans_running
             if stale and not busy:
