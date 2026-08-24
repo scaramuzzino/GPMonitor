@@ -455,14 +455,22 @@
   .dsec{margin-bottom:20px}
   .dsec-h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);
     font-weight:600;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-  .dtiles{display:grid;grid-template-columns:repeat(9,1fr);gap:10px}
-  @media(max-width:1000px){.dtiles{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}}
-  .dtile{background:#0d1117;border:1px solid var(--line);border-radius:9px;padding:12px 10px 10px;
+  .dtiles{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:6px}
+  @media(max-width:1100px){.dtiles{grid-template-columns:repeat(auto-fit,minmax(84px,1fr))}}
+  .dtile{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:7px 5px 6px;
     text-align:center;position:relative;overflow:hidden}
-  .dtile .dtv{font-size:28px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
-  .dtile .dtl{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .dtile .dtv{font-size:19px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+  .dtile .dtl{font-size:8.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.02em;margin-top:2px}
   .dtile .dtv,.dtile .dtl{position:relative;z-index:1}
-  .dtile .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:34px;display:block;opacity:.85}
+  .dtile .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:20px;display:block;opacity:.8}
+  /* tab del drawer Docker */
+  .dtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0}
+  .dtab{padding:7px 15px;font-size:12px;font-weight:600;color:var(--mut);cursor:pointer;
+    border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;margin-bottom:-1px}
+  .dtab:hover{color:var(--fg)}
+  .dtab.on{color:var(--fg);background:#0d1117;border-color:var(--line)}
+  .dpane .dsec{margin-bottom:0}
+  .dpane .dsec-h{display:none}
   .dcharts2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:900px){.dcharts2{grid-template-columns:1fr}}
   .dleg{display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:11px;color:var(--mut)}
@@ -1443,6 +1451,7 @@ function sortConts(list){
 
 // ------------------------------------------------------------ dashboard Docker (modale grande, stile Grafana)
 let dockHost = null;     // host della dashboard Docker aperta
+let dockTab = "andamento";   // tab attiva del drawer Docker: andamento|carico|rete|container
 let DOCK_HIST = [];      // storico righe (ts,dock_cpu,dock_mem,cont_running,cont_total) dell'host aperto
 let dockTimer = null;    // timer di aggiornamento live mentre la modale è aperta
 let dockRO = null;       // ResizeObserver: ridisegna i grafici quando la modale cambia larghezza
@@ -1468,7 +1477,7 @@ function dtile(val, lbl, col, spark){
 }
 
 async function openDock(name){
-  dockHost=name;
+  dockHost=name; dockTab="andamento";
   document.getElementById("dockOvl").classList.add("on");
   document.getElementById("dockTitle").innerHTML =
     `${WHALE}<span>Docker — ${escapeHtml(name)}</span><span class="livedot" title="aggiornamento automatico ogni 5s">● live</span>`;
@@ -1527,8 +1536,7 @@ function renderDockerDash(){
         spRun=sparkSvg(runPts,"#3fb950"), spNet=sparkSvg(rxPts,"#bc8cff");
 
   // --- Panoramica: riga di stat-tile numeroni (stile Grafana), con sparkline di sfondo
-  const overview = `<div class="dsec"><div class="dsec-h">Panoramica</div>
-    <div class="dtiles">
+  const overview = `<div class="dtiles">
       ${dtile(tot, "Container")}
       ${dtile(pctRun.toFixed(0)+"%", "% Attivi", "var(--ok)", spRun)}
       ${dtile(runN, "Attivi (ora)", "var(--ok)")}
@@ -1540,7 +1548,7 @@ function renderDockerDash(){
       ${dtile(pidTot, "PID")}
       ${dtile(imgs!=null?imgs:"—", "Immagini")}
       ${dtile(cpus!=null?cpus:"—", "Core")}
-    </div></div>`;
+    </div>`;
 
   // --- Andamento: 3 pannelli (area riempita · multilinea con legenda · barre)
   const charts = `<div class="dsec"><div class="dsec-h">Andamento · ${winLabel(winMin)}</div>
@@ -1623,34 +1631,43 @@ function renderDockerDash(){
       <th class="num" data-csort="mem">MEM${arr('mem')}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
+  const tabs=[["andamento","Andamento"],["carico","Carico"],["rete","Rete"],["container","Container"]];
+  const tabbar=`<div class="dtabs">${tabs.map(([k,l])=>`<span class="dtab ${dockTab===k?'on':''}" data-dtab="${k}">${l}</span>`).join("")}</div>`;
+  const pane=(k,html)=>`<div class="dpane" data-pane="${k}"${dockTab===k?"":' style="display:none"'}>${html}</div>`;
+
   const _sc=body.scrollTop;   // preservo lo scroll durante il refresh live
-  body.innerHTML = overview + charts + carico + conns + bars + table;
+  body.innerHTML = overview + tabbar
+    + pane("andamento", charts)
+    + pane("carico", carico)
+    + pane("rete", conns)
+    + pane("container", bars + table);
   body.scrollTop=_sc;
 
-  // disegno grafici/heatmap dopo l'inserimento dell'HTML
+  // disegno SOLO i grafici della tab attiva (i pannelli nascosti hanno larghezza 0)
   const pctFmt=v=>v==null?"—":v.toFixed(0)+"%", numFmt=v=>v==null?"—":v.toFixed(0);
-  // Andamento
-  drawChart(document.getElementById("dChartCpu"), document.getElementById("dTipCpu"),
-            [{name:"CPU util.", color:"#f0883e", pts:cpuPts}], pctFmt, {fill:true});
-  drawChart(document.getElementById("dChartCont"), document.getElementById("dTipCont"),
-            [{name:"attivi", color:"#3fb950", pts:runPts},
-             {name:"totali", color:"#8b949e", pts:totPts}], numFmt);
-  drawBars(document.getElementById("dBarsRx"), rxPts, v=>hrate(v), "#3fb950");
-  // Carico
-  drawChart(document.getElementById("dChartLoad"), document.getElementById("dTipLoad"),
-            [{name:"CPU util.", color:"#58a6ff", pts:cpuPts},
-             {name:"MEM util.", color:"#3fb950", pts:memPts}], pctFmt);
-  drawHeatmap(document.getElementById("dHeat"), [
-    {label:"CPU util. %", pts:cpuPts, max:100, fmt:v=>v.toFixed(0)+"%"},
-    {label:"MEM util. %", pts:memPts, max:100, fmt:v=>v.toFixed(0)+"%"},
-    {label:"Rete RX",     pts:rxPts,  fmt:v=>hrate(v)},
-    {label:"Conn. ESTAB", pts:estabPts, fmt:v=>v.toFixed(0)},
-    {label:"Attivi",      pts:runPts, fmt:v=>v.toFixed(0)},
-  ]);
-  // Rete & Connessioni
-  drawBars(document.getElementById("dBarsTx"), txPts, v=>hrate(v), "#bc8cff");
-  drawChart(document.getElementById("dAreaConn"), document.getElementById("dTipConn"),
-            [{name:"ESTAB", color:"#d29922", pts:estabPts}], numFmt, {fill:true});
+  if(dockTab==="andamento"){
+    drawChart(document.getElementById("dChartCpu"), document.getElementById("dTipCpu"),
+              [{name:"CPU util.", color:"#f0883e", pts:cpuPts}], pctFmt, {fill:true});
+    drawChart(document.getElementById("dChartCont"), document.getElementById("dTipCont"),
+              [{name:"attivi", color:"#3fb950", pts:runPts},
+               {name:"totali", color:"#8b949e", pts:totPts}], numFmt);
+    drawBars(document.getElementById("dBarsRx"), rxPts, v=>hrate(v), "#3fb950");
+  } else if(dockTab==="carico"){
+    drawChart(document.getElementById("dChartLoad"), document.getElementById("dTipLoad"),
+              [{name:"CPU util.", color:"#58a6ff", pts:cpuPts},
+               {name:"MEM util.", color:"#3fb950", pts:memPts}], pctFmt);
+    drawHeatmap(document.getElementById("dHeat"), [
+      {label:"CPU util. %", pts:cpuPts, max:100, fmt:v=>v.toFixed(0)+"%"},
+      {label:"MEM util. %", pts:memPts, max:100, fmt:v=>v.toFixed(0)+"%"},
+      {label:"Rete RX",     pts:rxPts,  fmt:v=>hrate(v)},
+      {label:"Conn. ESTAB", pts:estabPts, fmt:v=>v.toFixed(0)},
+      {label:"Attivi",      pts:runPts, fmt:v=>v.toFixed(0)},
+    ]);
+  } else if(dockTab==="rete"){
+    drawBars(document.getElementById("dBarsTx"), txPts, v=>hrate(v), "#bc8cff");
+    drawChart(document.getElementById("dAreaConn"), document.getElementById("dTipConn"),
+              [{name:"ESTAB", color:"#d29922", pts:estabPts}], numFmt, {fill:true});
+  }
 }
 // ultimo valore non nullo di una serie [[ts,val],...]
 function lastNonNull(pts){ for(let i=pts.length-1;i>=0;i--){ if(pts[i][1]!=null) return pts[i][1]; } return null; }
@@ -1956,7 +1973,7 @@ async function refresh(){
 
 // ------------------------------------------------------------ eventi
 document.addEventListener("click", e=>{
-  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-saihost],[data-secfilter],[data-secwin],[data-secx],[data-kpi]");
+  const t=e.target.closest("[data-win],[data-cont],[data-csort],[data-dockhead],[data-dockdash],[data-dtab],[data-enh],[data-add],[data-del],[data-uappr],[data-urej],[data-udel],[data-urole],[data-upw],[data-upwsave],[data-upwcancel],[data-flowhost],[data-flowdir],[data-scan],[data-rescan],[data-remview],[data-pexp],[data-copy],[data-copycmd],[data-sechost],[data-saihost],[data-secfilter],[data-secwin],[data-secx],[data-kpi]");
   if(!t) return;
   if(t.dataset.win){ winMin=+t.dataset.win; document.getElementById("win").value=minToSlider(winMin);
                           document.getElementById("winval").textContent=winLabel(winMin); renderToggles(); refresh(); }
@@ -1969,6 +1986,7 @@ document.addEventListener("click", e=>{
                            dockerSel[h] = dockerSel[h]===t.dataset.cont ? null : t.dataset.cont;
                            dockHost ? renderDockerDash() : redraw(); }
   else if(t.dataset.dockdash){ openDock(t.dataset.dockdash); }
+  else if(t.dataset.dtab){ dockTab=t.dataset.dtab; renderDockerDash(); }
   else if(t.dataset.add){ openConfig(); }
   else if(t.dataset.del){ removeHost(t.dataset.del); }
   else if(t.dataset.uappr){ userAction(t.dataset.uappr, "approve"); }
